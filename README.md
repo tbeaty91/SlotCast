@@ -242,7 +242,7 @@ the full list.
 
 | Command | |
 |---|---|
-| `/slotcast` | open options |
+| `/slotcast` | open (or close) the options window |
 | `/slotcast probe` | full client capability report in a copyable window |
 | `/slotcast probe chat` | same report printed to chat instead |
 | `/slotcast status` | version, source bar, managed frame count, bindings and their cast strings |

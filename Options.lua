@@ -11,10 +11,12 @@ local Options = ns.Options
 
 local ROW_H    = 24
 local COL_W    = 300
+local CONTENT_W = 652
+local CONTENT_H = 512
 local LEFT_X   = 16
 local RIGHT_X  = 336
 
-local panel, category
+local panel, category, standalone, settingsHost
 local barButtons, specialRows, slotRows = {}, {}, {}
 local warningText, conflictText, slotHeader, rankDefaultLabel
 local rankDefaultButtons = {}
@@ -241,8 +243,12 @@ local function SelectBar(bar)
 end
 
 local function BuildPanel()
+    -- `panel` holds every widget and nothing else. It is reparented into
+    -- whichever host is showing it: the standalone window that /slotcast opens,
+    -- or Blizzard's Settings canvas. Widgets anchor to it, so both hosts get an
+    -- identical layout with no duplicate construction.
     panel = CreateFrame("Frame", "SlotCastOptionsPanel", UIParent)
-    panel.name = "SlotCast"
+    panel:SetSize(CONTENT_W, CONTENT_H)
     panel:Hide()
 
     local title = Label(panel, "SlotCast", "GameFontNormalLarge")
@@ -394,8 +400,74 @@ local function BuildPanel()
         slotRows[i] = row
     end
 
-    panel:SetScript("OnShow", Options.RefreshDisplay)
     return panel
+end
+
+------------------------------------------------------------------------------
+-- hosts
+--
+-- /slotcast opens the standalone window rather than Blizzard's Settings frame.
+-- Settings.OpenToCategory depends on category-id plumbing that has been
+-- rewritten more than once, and a config panel you tweak while watching your
+-- unit frames is better off as a window you can drag anyway. The Settings entry
+-- stays registered so the addon is still discoverable in the AddOns tab.
+------------------------------------------------------------------------------
+
+local function AttachTo(host)
+    if not panel then return end
+    panel:SetParent(host)
+    panel:ClearAllPoints()
+    panel:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+    panel:Show()
+    Options.RefreshDisplay()
+end
+
+local function BuildStandalone()
+    local f = CreateFrame("Frame", "SlotCastWindow", UIParent)
+    f:SetSize(CONTENT_W + 16, CONTENT_H + 40)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("HIGH")
+    f:SetToplevel(true)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+
+    local bg = f:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.94)
+
+    local edge = f:CreateTexture(nil, "BORDER")
+    edge:SetPoint("TOPLEFT", 1, -1)
+    edge:SetPoint("BOTTOMRIGHT", -1, 1)
+    edge:SetColorTexture(0.35, 0.45, 0.55, 1)
+
+    local inner = f:CreateTexture(nil, "ARTWORK")
+    inner:SetPoint("TOPLEFT", 2, -2)
+    inner:SetPoint("BOTTOMRIGHT", -2, 2)
+    inner:SetColorTexture(0.05, 0.05, 0.07, 1)
+
+    local holder = CreateFrame("Frame", nil, f)
+    holder:SetPoint("TOPLEFT", 8, -8)
+    holder:SetSize(CONTENT_W, CONTENT_H)
+    f.holder = holder
+
+    -- Built after the holder and lifted above it: the content is reparented
+    -- into the holder, so anything that must stay clickable has to sit higher.
+    local close = PushButton(f, 24, 22, "x")
+    close:SetPoint("TOPRIGHT", -6, -6)
+    close:SetFrameLevel(holder:GetFrameLevel() + 10)
+    close:SetScript("OnClick", function() f:Hide() end)
+
+    f:SetScript("OnShow", function() AttachTo(holder) end)
+    f:Hide()
+
+    if type(_G.UISpecialFrames) == "table" then
+        tinsert(_G.UISpecialFrames, "SlotCastWindow")
+    end
+
+    return f
 end
 
 ------------------------------------------------------------------------------
@@ -489,21 +561,38 @@ end
 
 function Options.Init()
     BuildPanel()
+    standalone = BuildStandalone()
+
+    -- A separate host frame so Settings owns something that is not the content
+    -- itself; the content moves between the two on show.
+    settingsHost = CreateFrame("Frame", "SlotCastSettingsHost", UIParent)
+    settingsHost.name = "SlotCast"
+    settingsHost:Hide()
+    settingsHost:SetScript("OnShow", function(self)
+        if standalone then standalone:Hide() end
+        AttachTo(self)
+    end)
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
-        category = Settings.RegisterCanvasLayoutCategory(panel, "SlotCast")
-        category.ID = "SlotCast"
-        Settings.RegisterAddOnCategory(category)
+        local ok, result = pcall(Settings.RegisterCanvasLayoutCategory, settingsHost, "SlotCast")
+        if ok and result then
+            category = result
+            category.ID = "SlotCast"
+            pcall(Settings.RegisterAddOnCategory, category)
+        end
     elseif InterfaceOptions_AddCategory then
-        InterfaceOptions_AddCategory(panel)
+        pcall(InterfaceOptions_AddCategory, settingsHost)
     end
 end
 
 function Options.Open()
-    if Settings and Settings.OpenToCategory and category then
-        Settings.OpenToCategory(category.ID)
-    elseif InterfaceOptionsFrame_OpenToCategory then
-        InterfaceOptionsFrame_OpenToCategory(panel)
-        InterfaceOptionsFrame_OpenToCategory(panel)
+    if not standalone then
+        ns.Warn("options window was never built - run /slotcast status.")
+        return
+    end
+    if standalone:IsShown() then
+        standalone:Hide()
+    else
+        standalone:Show()
     end
 end
