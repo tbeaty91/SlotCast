@@ -75,6 +75,48 @@ slot instead.
 vehicles. SlotCast follows the visible page so the binding matches what you see,
 but that means the binding changes when the page does. Use bars 6–8.
 
+## Spell ranks
+
+On a client with Classic-style spell ranks, every action slot holds one specific
+rank — each rank is its own spell ID and its own spellbook entry, so there is no
+"rankless" thing to drag. SlotCast therefore has to choose which string to cast,
+and that choice is **per slot**:
+
+| Mode | Casts | For |
+|---|---|---|
+| `in slot` (default) | `Renew(Rank 2)` | downranking — the rank you put there, exactly |
+| `highest` | `Renew` | the best rank you know, auto-upgrading as you level |
+
+Each slot row gets a small toggle showing `R2` or `max`; the buttons next to
+**Ranks:** at the top of the column set the default for all of them.
+`/slotcast rank slot` and `/slotcast rank highest` do the same from chat.
+
+Per-slot is the point. A Classic healer wants Flash Heal at max *and* Greater
+Heal at Rank 3 bound at the same time, on different clicks — and re-dragging a
+different rank into a slot retunes it without touching the binding at all.
+
+The rank string comes from the client (`C_Spell.GetSpellSubtext`, falling back
+to `GetSpellSubtext` and Classic's two-return `GetSpellInfo`), never rebuilt by
+hand — the word "Rank" is localised, and the cast parser wants the local one.
+Retail also uses subtext for things that aren't ranks at all ("Fire", "Holy"), so
+a subtext only counts as a rank if it contains a number; anything else falls back
+to the rankless cast, which is the safe direction to be wrong in.
+
+### If ranked casts don't fire
+
+The default emits `type="spell"` with `Renew(Rank 2)`, which the secure handler
+passes to `CastSpellByName` along with the frame's unit. That is the long-standing
+Classic form, but it is worth confirming on a new engine. If a ranked binding does
+nothing while an unranked one works:
+
+```
+/slotcast castmode macro
+```
+
+That switches to `type="macro"` with `/cast [@mouseover,exists][] Renew(Rank 2)`,
+which is the syntax you'd type by hand. `/slotcast status` prints the exact cast
+string for every binding, so you can see what's being sent.
+
 ## Other clients
 
 SlotCast does not hard-code which bars exist or which action slots they own. It
@@ -127,7 +169,9 @@ the full list.
 | Command | |
 |---|---|
 | `/slotcast` | open options |
-| `/slotcast status` | version, source bar, managed frame count, current bindings |
+| `/slotcast status` | version, source bar, managed frame count, bindings and their cast strings |
+| `/slotcast rank slot\|highest` | default rank handling for all slots |
+| `/slotcast castmode spell\|macro` | how casts are emitted; switch if ranked casts don't fire |
 | `/slotcast conflicts` | list Blizzard's click bindings and any overlap |
 | `/slotcast dump` | raw `C_ClickBindings.GetProfileInfo()` output |
 | `/slotcast toggle` | enable/disable without unloading |

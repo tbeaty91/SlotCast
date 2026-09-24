@@ -16,7 +16,8 @@ local RIGHT_X  = 336
 
 local panel, category
 local barButtons, specialRows, slotRows = {}, {}, {}
-local warningText, conflictText, slotHeader
+local warningText, conflictText, slotHeader, rankDefaultLabel
+local rankDefaultButtons = {}
 
 ------------------------------------------------------------------------------
 -- tiny widget kit
@@ -132,11 +133,11 @@ local function CreateRow(parent, hasIcon)
 
     row.label = Label(row, "", "GameFontHighlightSmall")
     row.label:SetPoint("LEFT", textX, 0)
-    row.label:SetWidth(132 - (hasIcon and 0 or -24))
+    row.label:SetWidth(144 - textX)
     row.label:SetWordWrap(false)
 
-    row.capture = PushButton(row, 104, 20, "")
-    row.capture:SetPoint("LEFT", 160, 0)
+    row.capture = PushButton(row, 96, 20, "")
+    row.capture:SetPoint("LEFT", 148, 0)
     row.capture:RegisterForClicks("AnyUp")
     row.capture:SetScript("OnClick", function(self, mouseButton)
         local button = ns.ButtonNumber(mouseButton)
@@ -155,8 +156,38 @@ local function CreateRow(parent, hasIcon)
     end)
     row.capture:SetScript("OnLeave", GameTooltip_Hide)
 
+    -- Rank toggle. Only slot rows have one; special actions have no rank.
+    if hasIcon then
+        row.rank = PushButton(row, 28, 20, "")
+        row.rank:SetPoint("LEFT", 248, 0)
+        row.rank:SetScript("OnClick", function()
+            local current = ns.RankModeFor(row.target)
+            ns.SetRankModeFor(row.target, current == "highest" and "slot" or "highest")
+            ns.Refresh(true)
+        end)
+        row.rank:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if not row.rankText then
+                GameTooltip:SetText("No ranks")
+                GameTooltip:AddLine("This spell has only one rank, so there is nothing to choose.", 0.8, 0.8, 0.8, true)
+            elseif ns.RankModeFor(row.target) == "highest" then
+                GameTooltip:SetText("Highest rank")
+                GameTooltip:AddLine(("Casts |cffffffff%s|r - always the best rank you know."):format(row.castText or "?"), 0.8, 0.8, 0.8, true)
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine(("Click to cast %s exactly instead."):format(row.rankText), 0.5, 0.8, 1, true)
+            else
+                GameTooltip:SetText(row.rankText)
+                GameTooltip:AddLine(("Casts |cffffffff%s|r - this rank exactly, for downranking."):format(row.castText or "?"), 0.8, 0.8, 0.8, true)
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Click to always cast the highest rank instead.", 0.5, 0.8, 1, true)
+            end
+            GameTooltip:Show()
+        end)
+        row.rank:SetScript("OnLeave", GameTooltip_Hide)
+    end
+
     row.clear = PushButton(row, 20, 20, "x")
-    row.clear:SetPoint("LEFT", 268, 0)
+    row.clear:SetPoint("LEFT", 278, 0)
     row.clear:SetScript("OnClick", function() Assign(row.target, nil) end)
 
     return row
@@ -169,8 +200,22 @@ local function UpdateRow(row)
 
     if type(row.target) ~= "number" then return end
 
-    local spec = ns.Slots.ReadSlot(ns.Slots.SlotFor(row.target))
+    local spec = ns.Slots.ReadSlot(ns.Slots.SlotFor(row.target), row.target)
     row.note = spec and spec.note or nil
+    row.rankText = spec and spec.rank or nil
+    row.castText = spec and spec.cast or nil
+
+    if row.rank then
+        if spec and spec.rank then
+            row.rank:SetEnabled(true)
+            row.rank:SetAlpha(1)
+            row.rank:SetText(spec.rankMode == "highest" and "|cffffcc00max|r" or ns.ShortRank(spec.rank))
+        else
+            row.rank:SetEnabled(false)
+            row.rank:SetAlpha(0.3)
+            row.rank:SetText("-")
+        end
+    end
 
     if row.icon then
         row.icon:SetTexture(spec and spec.icon or nil)
@@ -307,9 +352,43 @@ local function BuildPanel()
     slotHint:SetPoint("TOPLEFT", RIGHT_X, -86)
     slotHint:SetWidth(COL_W)
 
+    -- Default rank handling. Per-slot buttons on each row override this.
+    rankDefaultLabel = Label(panel, "Ranks:", "GameFontHighlightSmall")
+    rankDefaultLabel:SetPoint("TOPLEFT", RIGHT_X, -108)
+
+    local modes = { { "slot", "in slot" }, { "highest", "highest" } }
+    for i, mode in ipairs(modes) do
+        local btn = PushButton(panel, 64, 20, mode[2])
+        btn:SetPoint("TOPLEFT", RIGHT_X + 44 + (i - 1) * 68, -104)
+        btn.sel = btn:CreateTexture(nil, "OVERLAY")
+        btn.sel:SetAllPoints()
+        btn.sel:SetColorTexture(1, 0.82, 0, 0.3)
+        btn.sel:Hide()
+        btn:SetScript("OnClick", function()
+            ns.db.rankMode = mode[1]
+            wipe(ns.db.rankOverrides)
+            ns.Refresh(true)
+        end)
+        btn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if mode[1] == "slot" then
+                GameTooltip:SetText("Cast the rank in the slot")
+                GameTooltip:AddLine("Renew (Rank 2) in the slot casts |cffffffffRenew(Rank 2)|r. This is what downranking needs.", 0.8, 0.8, 0.8, true)
+            else
+                GameTooltip:SetText("Cast the highest rank")
+                GameTooltip:AddLine("Renew (Rank 2) in the slot casts |cffffffffRenew|r, which is always the best rank you know.", 0.8, 0.8, 0.8, true)
+            end
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Sets the default for every slot and clears per-slot overrides.", 1, 0.6, 0.2, true)
+            GameTooltip:Show()
+        end)
+        btn:SetScript("OnLeave", GameTooltip_Hide)
+        rankDefaultButtons[i] = { button = btn, mode = mode[1] }
+    end
+
     for i = 1, ns.SLOTS_PER_BAR do
         local row = CreateRow(panel, true)
-        row:SetPoint("TOPLEFT", RIGHT_X, -106 - (i - 1) * ROW_H)
+        row:SetPoint("TOPLEFT", RIGHT_X, -132 - (i - 1) * ROW_H)
         row.target = i
         slotRows[i] = row
     end
@@ -335,6 +414,19 @@ function Options.RefreshDisplay()
     end
 
     slotHeader:SetText(ns.BAR_NAMES[ns.db.bar] or ("Bar " .. ns.db.bar))
+
+    -- The rank controls are meaningless on a client without spell ranks, so
+    -- only show them once a ranked spell actually turns up on the bar.
+    local hasRanks = false
+    for i = 1, ns.SLOTS_PER_BAR do
+        local spec = ns.Slots.ReadSlot(ns.Slots.SlotFor(i), i)
+        if spec and spec.rank then hasRanks = true break end
+    end
+    rankDefaultLabel:SetShown(hasRanks)
+    for _, entry in ipairs(rankDefaultButtons) do
+        entry.button:SetShown(hasRanks)
+        entry.button.sel:SetShown(ns.db.rankMode == entry.mode)
+    end
 
     for _, row in ipairs(specialRows) do UpdateRow(row) end
     for _, row in ipairs(slotRows) do UpdateRow(row) end

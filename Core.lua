@@ -46,6 +46,19 @@ ns.defaults = {
         ["1"] = "target",
         ["2"] = "menu",
     },
+
+    -- Rank handling, for clients that have spell ranks.
+    --   "slot"    cast exactly the rank sitting in the slot -> Renew(Rank 2)
+    --   "highest" cast the highest rank learned             -> Renew
+    -- rankMode is the default for every slot; rankOverrides[slotIndex] wins.
+    rankMode      = "slot",
+    rankOverrides = {},
+
+    -- "spell" uses type="spell" so the secure handler supplies the unit.
+    -- "macro" falls back to /cast [@mouseover] if a client's CastSpellByName
+    -- will not take the "Name(Rank N)" form.
+    castMode      = "spell",
+
     warnConflicts  = true,
     announceDefer  = true,
 }
@@ -164,6 +177,8 @@ function handlers.ACTIONBAR_PAGE_CHANGED()
 end
 
 handlers.UPDATE_MACROS                  = function() ns.Refresh() end
+handlers.LEARNED_SPELL_IN_TAB           = function() ns.Refresh() end
+handlers.PLAYER_LEVEL_UP                = function() ns.Refresh() end
 handlers.PLAYER_SPECIALIZATION_CHANGED  = function() ns.Refresh() end
 handlers.UPDATE_BONUS_ACTIONBAR         = function() if ns.db and ns.db.bar == 1 then ns.Refresh() end end
 handlers.UPDATE_VEHICLE_ACTIONBAR       = function() if ns.db and ns.db.bar == 1 then ns.Refresh() end end
@@ -216,12 +231,32 @@ SlashCmdList.SLOTCAST = function(msg)
     elseif cmd == "conflicts" then
         ns.Conflicts.Report(true)
 
+    elseif cmd == "rank" then
+        if rest == "slot" or rest == "highest" then
+            ns.db.rankMode = rest
+            wipe(ns.db.rankOverrides)
+            ns.Print("rank mode: %s (per-slot overrides cleared)",
+                rest == "slot" and "cast the rank in the slot" or "cast the highest rank learned")
+            ns.Refresh(true)
+        else
+            ns.Print("usage: |cffffff00/slotcast rank slot|r or |cffffff00/slotcast rank highest|r (current: %s)", ns.db.rankMode)
+        end
+
+    elseif cmd == "castmode" then
+        if rest == "spell" or rest == "macro" then
+            ns.db.castMode = rest
+            ns.Print("cast mode: %s", rest)
+            ns.Refresh(true)
+        else
+            ns.Print("usage: |cffffff00/slotcast castmode spell|r or |cffffff00/slotcast castmode macro|r (current: %s)", ns.db.castMode)
+        end
+
     elseif cmd == "toggle" then
         ns.db.enabled = not ns.db.enabled
         ns.Print(ns.db.enabled and "enabled" or "disabled")
         ns.Refresh(true)
 
     else
-        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00status|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
+        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
     end
 end

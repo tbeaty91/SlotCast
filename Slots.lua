@@ -202,15 +202,102 @@ local SPECIAL_SPEC = {
 local function SpellName(id)
     if C_Spell and C_Spell.GetSpellInfo then
         local info = C_Spell.GetSpellInfo(id)
-        return info and info.name
+        if info and info.name then return info.name end
     end
-    return (GetSpellInfo(id))
+    if GetSpellInfo then return (GetSpellInfo(id)) end
+    return nil
+end
+
+-- A spell's subtext. On a rank-enabled client this is the localised rank
+-- string -- "Rank 2", "Rang 2", "Rango 2" -- which is exactly the text the
+-- cast parser expects inside the parentheses. Never build it by hand: the
+-- word is translated and only the client knows the right one.
+local function SpellRank(id)
+    local rank
+
+    if C_Spell and C_Spell.GetSpellSubtext then
+        local ok, value = pcall(C_Spell.GetSpellSubtext, id)
+        if ok then rank = value end
+    end
+    if (not rank or rank == "") and GetSpellSubtext then
+        local ok, value = pcall(GetSpellSubtext, id)
+        if ok then rank = value end
+    end
+    if (not rank or rank == "") and GetSpellInfo then
+        -- Classic-era signature returns rank as the second value.
+        local ok, _, value = pcall(GetSpellInfo, id)
+        if ok then rank = value end
+    end
+
+    if type(rank) ~= "string" or rank == "" then return nil end
+
+    -- Retail uses subtext for things that are not ranks at all ("Fire",
+    -- "Holy", a spec name). Casting "Name(Fire)" would simply fail, so only
+    -- treat a subtext as a rank when it carries a number. Guessing wrong in
+    -- this direction is safe: we fall back to the rankless cast.
+    if not rank:find("%d") then return nil end
+
+    return rank
+end
+
+-- "Rank 2" -> "R2", for the cramped options row.
+function ns.ShortRank(rank)
+    local n = rank and rank:match("%d+")
+    return n and ("R" .. n) or "R?"
+end
+
+------------------------------------------------------------------------------
+-- rank mode
+--
+-- Every action slot holds one specific rank -- in Classic each rank is its own
+-- spell ID and its own spellbook entry, so there is no rankless thing to drag.
+-- The binding therefore has to choose which string to emit:
+--
+--   "slot"    -> "Renew(Rank 2)"  cast exactly what is in the slot
+--   "highest" -> "Renew"          cast the highest rank learned
+--
+-- This is per-slot on purpose. Downranking is the entire reason ranks matter,
+-- and a healer wants Flash Heal at max and Greater Heal at Rank 3 at the same
+-- time, from two different clicks.
+------------------------------------------------------------------------------
+
+ns.RANK_MODES = { slot = "slot", highest = "highest" }
+
+function ns.RankModeFor(index)
+    if type(index) ~= "number" then return ns.db and ns.db.rankMode or "slot" end
+    local overrides = ns.db and ns.db.rankOverrides
+    return (overrides and overrides[index]) or (ns.db and ns.db.rankMode) or "slot"
+end
+
+function ns.SetRankModeFor(index, mode)
+    if not ns.db.rankOverrides then ns.db.rankOverrides = {} end
+    ns.db.rankOverrides[index] = (mode ~= ns.db.rankMode) and mode or nil
 end
 
 -- Returns a spec table describing what to put on the button, or nil for empty.
 --   { type = <secure action type>, key = <payload attribute>, value = <payload>,
 --     label = <human text>, icon = <texture>, note = <caveat for the UI> }
-function Slots.ReadSlot(slot)
+-- Wrap a cast string for the configured cast mode.
+--   "spell" -> type="spell",  the secure handler passes the frame's unit
+--   "macro" -> type="macro",  "/cast [@mouseover] ..." as a fallback if a
+--              client's CastSpellByName rejects the parenthesised rank form
+local function CastSpec(castString, label, icon, rank, mode)
+    if (ns.db and ns.db.castMode) == "macro" then
+        return {
+            type = "macro", key = "macrotext",
+            value = "/cast [@mouseover,exists][] " .. castString,
+            label = label, icon = icon, rank = rank, rankMode = mode, cast = castString,
+        }
+    end
+    return {
+        type = "spell", key = "spell", value = castString,
+        label = label, icon = icon, rank = rank, rankMode = mode, cast = castString,
+    }
+end
+
+-- `index` is the 1..12 slot position, needed to look up its rank mode. It is
+-- optional: without it the global default applies.
+function Slots.ReadSlot(slot, index)
     if not HasAction(slot) then return nil end
 
     local kind, id = GetActionInfo(slot)
@@ -220,10 +307,28 @@ function Slots.ReadSlot(slot)
     if kind == "spell" then
         local name = SpellName(id)
         if not name then return nil end
+
+        local rank = SpellRank(id)
+        local mode = ns.RankModeFor(index)
+
+        -- "Renew(Rank 2)" casts that rank exactly; "Renew" casts the highest
+        -- rank known. The parentheses are the cast parser's own syntax, so the
+        -- rank string has to be the client's localised one, not a rebuilt one.
+        local castString = name
+        local label = name
+        if rank then
+            if mode == "highest" then
+                label = ("%s |cff808080(max)|r"):format(name)
+            else
+                castString = ("%s(%s)"):format(name, rank)
+                label = ("%s |cff80c0ff(%s)|r"):format(name, rank)
+            end
+        end
+
         -- type="spell" is the one that matters: SecureActionButton_OnClick
         -- resolves the frame's own unit attribute and casts on it, so this
         -- works on any registered unit frame with no per-frame macro text.
-        return { type = "spell", key = "spell", value = name, label = name, icon = icon }
+        return CastSpec(castString, label, icon, rank, mode)
 
     elseif kind == "item" then
         local name = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id))
@@ -266,7 +371,7 @@ end
 -- What a bind value resolves to, whether it is a slot index or a special.
 function Slots.ResolveBind(value)
     if type(value) == "number" then
-        return Slots.ReadSlot(Slots.SlotFor(value))
+        return Slots.ReadSlot(Slots.SlotFor(value), value)
     end
     local spec = SPECIAL_SPEC[value]
     if not spec then return nil end
@@ -327,6 +432,7 @@ function Slots.PrintPlan()
         local what = spec and spec.label or "|cff888888empty|r"
         if spec and spec.unsupported then what = "|cffff5555" .. (spec.label or "?") .. " (unsupported)|r" end
         local src = type(value) == "number" and ("slot %d"):format(value) or "action"
+        if spec and spec.cast then src = ("%s, casts \"%s\""):format(src, spec.cast) end
         ns.Print("  %s -> %s (%s)", ns.ComboText(combo), what, src)
         n = n + 1
     end
