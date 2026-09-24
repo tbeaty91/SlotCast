@@ -298,13 +298,14 @@ local function BuildPanel()
     local specialHeader = Label(panel, "Unit frame clicks", "GameFontNormal")
     specialHeader:SetPoint("TOPLEFT", LEFT_X, -196)
 
-    local specialHint = Label(panel, "Unbound clicks keep whatever the unit frame already did.", "GameFontDisableSmall")
+    local specialHint = Label(panel, "Unbound keeps the frame's own behaviour, including Blizzard click bindings. Bound here, SlotCast wins.", "GameFontDisableSmall")
     specialHint:SetPoint("TOPLEFT", LEFT_X, -214)
     specialHint:SetWidth(COL_W)
+    specialHint:SetJustifyV("TOP")
 
     for i, special in ipairs(ns.SPECIALS) do
         local row = CreateRow(panel, false)
-        row:SetPoint("TOPLEFT", LEFT_X, -232 - (i - 1) * ROW_H)
+        row:SetPoint("TOPLEFT", LEFT_X, -248 - (i - 1) * ROW_H)
         row.target = special.key
         row.label:SetText(special.label)
         specialRows[i] = row

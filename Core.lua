@@ -79,10 +79,14 @@ end
 ns.defaults = {
     enabled     = true,
     bar         = 8,
-    binds       = {
-        ["1"] = "target",
-        ["2"] = "menu",
-    },
+
+    -- Empty on purpose. Anything not listed here is left exactly as the unit
+    -- frame had it, which on current clients means Blizzard's own
+    -- "*type1 = target" / "*type2 = menu" keep working -- and so do any click
+    -- bindings the player set in Blizzard's UI. Claiming plain left and right
+    -- by default would override those for no gain, since it would only
+    -- reimplement behaviour the frame already has.
+    binds       = {},
 
     -- Rank handling, for clients that have spell ranks.
     --   "slot"    cast exactly the rank sitting in the slot -> Renew(Rank 2)
@@ -100,10 +104,17 @@ ns.defaults = {
     announceDefer  = true,
 }
 
-local function CopyDefaults(src, dst)
+-- Tables the user edits by removing entries. Merging defaults into these
+-- key-by-key would resurrect anything they deleted on the next login, so they
+-- are only seeded when absent entirely.
+local USER_TABLES = { binds = true, rankOverrides = true }
+
+local function CopyDefaults(src, dst, top)
     if type(dst) ~= "table" then dst = {} end
     for k, v in pairs(src) do
-        if type(v) == "table" then
+        if top and USER_TABLES[k] then
+            if type(dst[k]) ~= "table" then dst[k] = CopyDefaults(v, {}) end
+        elseif type(v) == "table" then
             dst[k] = CopyDefaults(v, dst[k])
         elseif dst[k] == nil then
             dst[k] = v
@@ -164,8 +175,24 @@ local handlers = {}
 
 function handlers.ADDON_LOADED(name)
     if name ~= ADDON then return end
-    SlotCastDB = CopyDefaults(ns.defaults, SlotCastDB)
+    SlotCastDB = CopyDefaults(ns.defaults, SlotCastDB, true)
     ns.db = SlotCastDB
+
+    -- configVersion is deliberately NOT in ns.defaults: CopyDefaults would
+    -- stamp it on an old profile and the migration below would never run.
+    if (SlotCastDB.configVersion or 1) < 2 then
+        -- v1 claimed plain left and right click for target/menu. That overrode
+        -- the player's own Blizzard click bindings on those two buttons while
+        -- only reproducing what the frame already did. Release them, but only
+        -- if they are still sitting at the old defaults.
+        if SlotCastDB.binds["1"] == "target" and SlotCastDB.binds["2"] == "menu" then
+            SlotCastDB.binds["1"] = nil
+            SlotCastDB.binds["2"] = nil
+            ns.releasedDefaultClicks = true
+        end
+        SlotCastDB.configVersion = 2
+    end
+
     SlotCast:UnregisterEvent("ADDON_LOADED")
 end
 
@@ -185,6 +212,12 @@ function handlers.PLAYER_LOGIN()
     end
 
     ns.Refresh(true)
+
+    if ns.releasedDefaultClicks then
+        ns.Print("plain left and right click are no longer claimed by default -")
+        ns.Print("your unit frames' own behaviour (and Blizzard's click bindings) handle them.")
+        ns.Print("Bind them in |cffffff00/slotcast|r if you want SlotCast to take them back.")
+    end
 
     -- Blizzard's own click bindings run in a separate secure path and will fire
     -- alongside ours. Say so once, on login, rather than silently double-casting.

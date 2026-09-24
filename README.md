@@ -37,10 +37,17 @@ select AddOns screen.
    with the mouse button you want, holding whatever modifiers you want. Clicking
    it with Shift+Right held binds Shift+Right.
 
-Left-click-to-target and right-click-for-menu are bindings too, in the *Unit
-frame clicks* column, and they're set that way by default. Anything left
-unbound keeps whatever behaviour the unit frame already had — SlotCast restores
-the original attribute rather than leaving a hole.
+Left-click-to-target and right-click-for-menu are available as bindings too, in
+the *Unit frame clicks* column, but **nothing there is bound by default**.
+Anything left unbound keeps whatever behaviour the unit frame already had —
+SlotCast restores the original attribute rather than leaving a hole.
+
+That default matters if you also use Blizzard's Click Bindings. SlotCast writes
+*specific* secure attributes (`type1`, `shift-type1`), while Blizzard writes
+*wildcard* ones (`*type1`), and a specific attribute wins the lookup. So on any
+click SlotCast binds, SlotCast takes precedence — nothing double-fires, but the
+Blizzard binding on that exact click stops working. Leaving plain left and right
+unbound is what keeps both systems usable side by side.
 
 ## What it binds to
 
