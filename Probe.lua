@@ -13,7 +13,7 @@ local ADDON, ns = ...
 ns.Probe = {}
 local Probe = ns.Probe
 
-local REPORT_VERSION = 1
+local REPORT_VERSION = 2
 
 ------------------------------------------------------------------------------
 -- report building
@@ -273,7 +273,18 @@ local function ProbeRanks()
             local ok, name, sub = pcall(getName, i, bookType)
             if not ok or not name then break end
             if type(sub) == "string" and sub ~= "" then
-                addf("  book %s: name=[%s] subtext=[%s]", i, name, sub)
+                -- Run the SHIPPING guard, not a reimplementation of it. This is
+                -- the single assumption the rank feature rests on: a subtext is
+                -- only treated as a rank if "Name(Subtext)" resolves to a real
+                -- spell. Every line here should read NO on a rankless client --
+                -- a YES means the guard fails open and would cast a bogus
+                -- string on a client that does have ranks.
+                local resolves = "?"
+                if type(ns.RankedFormResolves) == "function" then
+                    local okr, value = pcall(ns.RankedFormResolves, name, sub)
+                    resolves = okr and (value and "YES <-- GUARD FAILS OPEN" or "no") or "ERROR"
+                end
+                addf("  book %s: name=[%s] subtext=[%s]  ranked form resolves: %s", i, name, sub, resolves)
                 shown = shown + 1
                 if shown >= 8 then break end
             end
@@ -286,6 +297,8 @@ local function ProbeRanks()
     if shown == 0 then
         add("  NO spell in the spellbook has a subtext.")
         add("  -> either this client has no ranks, or ranks are exposed some other way.")
+    else
+        add("  (on a client without spell ranks every line above should say 'no')")
     end
 end
 
