@@ -130,10 +130,24 @@ it says about the spells on your bar, whether `ClickCastFrames` exists and what'
 in it, a real unit frame's secure attributes, and Blizzard's click-binding
 profile if there is one.
 
-If the command appears to do nothing at all, it errored: retail hides Lua errors
-unless `/console scriptErrors 1` is on, and a missing file looks identical to
-silence. `/slotcast status` lists which modules loaded, and every slash command
-now reports its own errors rather than dying quietly.
+If a slash command appears to do nothing at all, `/slotcast status` is the place
+to start: it reports the addon version, which modules loaded, and any events this
+client does not have.
+
+Two traps worth knowing, both of which produce exactly this "nothing happens"
+symptom:
+
+- **`RegisterEvent` raises on an unknown event name**, and event names differ
+  between clients — `LEARNED_SPELL_IN_TAB` became `LEARNED_SPELL_IN_SKILL_LINE`
+  in 11.0. One bad name in a registration loop aborts the rest of the file.
+  SlotCast registers events one at a time under `pcall`, so an absent event costs
+  that event and nothing else.
+- **Retail hides Lua errors** unless `/console scriptErrors 1` is set, so a file
+  that died partway looks identical to a file that loaded fine.
+
+Slash commands are registered at the top of `Core.lua`, before anything that can
+fail, for the same reason: a diagnostic that only works when everything else
+already works is useless.
 
 It reports absences as loudly as presences — `C_ClickBindings = nil` is a useful
 answer. Nothing identifying is collected: no character name, realm or guild.

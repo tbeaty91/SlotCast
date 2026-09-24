@@ -31,6 +31,39 @@ function ns.Warn(msg, ...)
 end
 
 ------------------------------------------------------------------------------
+-- slash commands
+--
+-- Registered up here, before anything that could fail, and calling a
+-- forward-declared Dispatch defined at the bottom. A diagnostic command that
+-- only exists if the whole file loaded is useless precisely when it is needed:
+-- an error anywhere above would take the commands down with it, and the symptom
+-- is a slash command that silently does nothing.
+------------------------------------------------------------------------------
+
+local Dispatch  -- defined at the end of this file
+
+SLASH_SLOTCAST1 = "/slotcast"
+SLASH_SLOTCAST2 = "/sc"
+
+SlashCmdList.SLOTCAST = function(msg)
+    local cmd, rest = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
+
+    if not Dispatch then
+        ns.Warn("Core.lua did not finish loading - an error stopped it partway.")
+        ns.Warn("Turn on |cffffff00/console scriptErrors 1|r, /reload, and send me the error.")
+        return
+    end
+
+    -- Errors surface here rather than being left to the client, which swallows
+    -- them unless scriptErrors is on.
+    local ok, err = pcall(Dispatch, cmd, rest)
+    if not ok then
+        ns.Warn("/slotcast %s failed: %s", cmd ~= "" and cmd or "(no args)", tostring(err))
+        ns.Warn("Run |cffffff00/slotcast status|r to see which modules loaded.")
+    end
+end
+
+------------------------------------------------------------------------------
 -- defaults
 --
 -- binds is keyed by a canonical combo string: "<alt-><ctrl-><shift->" .. button
@@ -182,6 +215,7 @@ end
 
 handlers.UPDATE_MACROS                  = function() ns.Refresh() end
 handlers.LEARNED_SPELL_IN_TAB           = function() ns.Refresh() end
+handlers.LEARNED_SPELL_IN_SKILL_LINE    = function() ns.Refresh() end
 handlers.PLAYER_LEVEL_UP                = function() ns.Refresh() end
 handlers.PLAYER_SPECIALIZATION_CHANGED  = function() ns.Refresh() end
 handlers.UPDATE_BONUS_ACTIONBAR         = function() if ns.db and ns.db.bar == 1 then ns.Refresh() end end
@@ -203,14 +237,24 @@ SlotCast:SetScript("OnEvent", function(_, event, ...)
     if fn then fn(...) end
 end)
 
-for event in pairs(handlers) do SlotCast:RegisterEvent(event) end
+-- RegisterEvent raises on an unknown event name, and event names differ
+-- between clients (LEARNED_SPELL_IN_TAB became LEARNED_SPELL_IN_SKILL_LINE in
+-- 11.0). Registering one by one means an absent event costs us that event, not
+-- the rest of the addon.
+ns.unavailableEvents = {}
+
+for event in pairs(handlers) do
+    local ok = pcall(SlotCast.RegisterEvent, SlotCast, event)
+    if not ok then
+        ns.unavailableEvents[#ns.unavailableEvents + 1] = event
+    end
+end
+
+table.sort(ns.unavailableEvents)
 
 ------------------------------------------------------------------------------
--- slash commands
+-- command implementations
 ------------------------------------------------------------------------------
-
-SLASH_SLOTCAST1 = "/slotcast"
-SLASH_SLOTCAST2 = "/sc"
 
 -- Which files actually loaded. A module missing from the addon folder is
 -- otherwise invisible: the slash command just nil-indexes and dies quietly,
@@ -233,7 +277,7 @@ local function Need(name)
     return nil
 end
 
-local function Dispatch(cmd, rest)
+function Dispatch(cmd, rest)
     if cmd == "" or cmd == "config" or cmd == "options" then
         if Need("Options") then ns.Options.Open() end
 
@@ -250,6 +294,10 @@ local function Dispatch(cmd, rest)
         else
             ns.Warn("modules MISSING: %s - copy the addon folder over again and /reload.",
                 table.concat(missing, ", "))
+        end
+
+        if #ns.unavailableEvents > 0 then
+            ns.Print("events not on this client (skipped): %s", table.concat(ns.unavailableEvents, ", "))
         end
 
         if ns.Slots then ns.Slots.PrintPlan() end
@@ -296,15 +344,3 @@ local function Dispatch(cmd, rest)
     end
 end
 
-SlashCmdList.SLOTCAST = function(msg)
-    local cmd, rest = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
-
-    -- Errors are surfaced here rather than left to the client, which swallows
-    -- them entirely unless the user has turned scriptErrors on. A command that
-    -- does nothing at all is the worst possible failure mode to debug.
-    local ok, err = pcall(Dispatch, cmd, rest)
-    if not ok then
-        ns.Warn("/slotcast %s failed: %s", cmd ~= "" and cmd or "(no args)", tostring(err))
-        ns.Warn("Run |cffffff00/slotcast status|r to see which modules loaded.")
-    end
-end
