@@ -222,6 +222,9 @@ SlashCmdList.SLOTCAST = function(msg)
             ns.Secure.ManagedCount())
         ns.Slots.PrintPlan()
 
+    elseif cmd == "probe" then
+        ns.Probe.Show()
+
     elseif cmd == "dump" then
         -- Prints Blizzard's click-binding profile exactly as the API returns it.
         -- The field names in that struct are the one thing here that cannot be
@@ -257,6 +260,6 @@ SlashCmdList.SLOTCAST = function(msg)
         ns.Refresh(true)
 
     else
-        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
+        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
     end
 end

@@ -11,4 +11,5 @@ Core.lua
 Slots.lua
 Secure.lua
 Conflicts.lua
+Probe.lua
 Options.lua

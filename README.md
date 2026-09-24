@@ -117,6 +117,34 @@ That switches to `type="macro"` with `/cast [@mouseover,exists][] Renew(Rank 2)`
 which is the syntax you'd type by hand. `/slotcast status` prints the exact cast
 string for every binding, so you can see what's being sent.
 
+## Reporting a problem on an unfamiliar client
+
+```
+/slotcast probe
+```
+
+opens a copyable window (Ctrl+A, Ctrl+C) with everything about the client that
+can't be determined from outside the game: build and project constants, which
+action bars exist and which slots they drive, the full spell API surface and what
+it says about the spells on your bar, whether `ClickCastFrames` exists and what's
+in it, a real unit frame's secure attributes, and Blizzard's click-binding
+profile if there is one.
+
+It reports absences as loudly as presences — `C_ClickBindings = nil` is a useful
+answer. Nothing identifying is collected: no character name, realm or guild.
+
+Two things make the report much more useful:
+
+- **Put spells on the source bar first**, including a deliberately downranked
+  one. Section 3b dumps every API's view of them.
+- **If the client has Blizzard click bindings, set one** before running it.
+  Section 5 can only show the real field names if a binding exists.
+
+The report is also written to saved variables as `lastProbe`, so after a
+`/reload` you can pull it from
+`WTF/Account/<account>/SavedVariables/SlotCast.lua` if the window's copy comes
+out truncated.
+
 ## Other clients
 
 SlotCast does not hard-code which bars exist or which action slots they own. It
@@ -169,6 +197,7 @@ the full list.
 | Command | |
 |---|---|
 | `/slotcast` | open options |
+| `/slotcast probe` | full client capability report in a copyable window |
 | `/slotcast status` | version, source bar, managed frame count, bindings and their cast strings |
 | `/slotcast rank slot\|highest` | default rank handling for all slots |
 | `/slotcast castmode spell\|macro` | how casts are emitted; switch if ranked casts don't fire |
