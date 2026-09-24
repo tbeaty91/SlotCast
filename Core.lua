@@ -7,6 +7,10 @@ local SlotCast = CreateFrame("Frame", "SlotCastFrame")
 ns.SlotCast = SlotCast
 _G.SlotCast = SlotCast
 
+-- Exposed purely so the namespace can be inspected from chat when something is
+-- wrong: /dump SlotCast.ns.Probe
+SlotCast.ns = ns
+
 local GetAddOnMetadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
 SlotCast.version = (GetAddOnMetadata and GetAddOnMetadata(ADDON, "Version")) or "?"
 
@@ -208,31 +212,59 @@ for event in pairs(handlers) do SlotCast:RegisterEvent(event) end
 SLASH_SLOTCAST1 = "/slotcast"
 SLASH_SLOTCAST2 = "/sc"
 
-SlashCmdList.SLOTCAST = function(msg)
-    local cmd, rest = msg:lower():match("^%s*(%S*)%s*(.-)%s*$")
+-- Which files actually loaded. A module missing from the addon folder is
+-- otherwise invisible: the slash command just nil-indexes and dies quietly,
+-- because retail hides Lua errors unless scriptErrors is on.
+ns.MODULES = { "Slots", "Secure", "Conflicts", "Probe", "Options" }
 
+function ns.MissingModules()
+    local missing = {}
+    for _, name in ipairs(ns.MODULES) do
+        if type(ns[name]) ~= "table" then missing[#missing + 1] = name end
+    end
+    return missing
+end
+
+-- Returns the module, or nil after explaining what to do about it.
+local function Need(name)
+    if type(ns[name]) == "table" then return ns[name] end
+    ns.Warn("%s.lua did not load.", name)
+    ns.Warn("Copy the whole SlotCast folder over again (the file is new), then /reload.")
+    return nil
+end
+
+local function Dispatch(cmd, rest)
     if cmd == "" or cmd == "config" or cmd == "options" then
-        ns.Options.Open()
+        if Need("Options") then ns.Options.Open() end
 
     elseif cmd == "status" then
-        ns.Print("v%s | %s | source bar %d | %d frames managed",
+        ns.Print("v%s | %s | source bar %s | %s frames managed",
             SlotCast.version,
             ns.db.enabled and "|cff00ff00enabled|r" or "|cffff0000disabled|r",
             ns.db.bar,
-            ns.Secure.ManagedCount())
-        ns.Slots.PrintPlan()
+            ns.Secure and ns.Secure.ManagedCount() or "?")
+
+        local missing = ns.MissingModules()
+        if #missing == 0 then
+            ns.Print("modules: |cff00ff00all %d loaded|r", #ns.MODULES)
+        else
+            ns.Warn("modules MISSING: %s - copy the addon folder over again and /reload.",
+                table.concat(missing, ", "))
+        end
+
+        if ns.Slots then ns.Slots.PrintPlan() end
 
     elseif cmd == "probe" then
-        ns.Probe.Show()
+        if Need("Probe") then ns.Probe.Show(rest == "chat") end
 
     elseif cmd == "dump" then
         -- Prints Blizzard's click-binding profile exactly as the API returns it.
         -- The field names in that struct are the one thing here that cannot be
         -- verified outside the game; this is how you confirm them.
-        ns.Conflicts.Dump()
+        if Need("Conflicts") then ns.Conflicts.Dump() end
 
     elseif cmd == "conflicts" then
-        ns.Conflicts.Report(true)
+        if Need("Conflicts") then ns.Conflicts.Report(true) end
 
     elseif cmd == "rank" then
         if rest == "slot" or rest == "highest" then
@@ -261,5 +293,18 @@ SlashCmdList.SLOTCAST = function(msg)
 
     else
         ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
+    end
+end
+
+SlashCmdList.SLOTCAST = function(msg)
+    local cmd, rest = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
+
+    -- Errors are surfaced here rather than left to the client, which swallows
+    -- them entirely unless the user has turned scriptErrors on. A command that
+    -- does nothing at all is the worst possible failure mode to debug.
+    local ok, err = pcall(Dispatch, cmd, rest)
+    if not ok then
+        ns.Warn("/slotcast %s failed: %s", cmd ~= "" and cmd or "(no args)", tostring(err))
+        ns.Warn("Run |cffffff00/slotcast status|r to see which modules loaded.")
     end
 end

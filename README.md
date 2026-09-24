@@ -130,6 +130,11 @@ it says about the spells on your bar, whether `ClickCastFrames` exists and what'
 in it, a real unit frame's secure attributes, and Blizzard's click-binding
 profile if there is one.
 
+If the command appears to do nothing at all, it errored: retail hides Lua errors
+unless `/console scriptErrors 1` is on, and a missing file looks identical to
+silence. `/slotcast status` lists which modules loaded, and every slash command
+now reports its own errors rather than dying quietly.
+
 It reports absences as loudly as presences — `C_ClickBindings = nil` is a useful
 answer. Nothing identifying is collected: no character name, realm or guild.
 
@@ -198,6 +203,7 @@ the full list.
 |---|---|
 | `/slotcast` | open options |
 | `/slotcast probe` | full client capability report in a copyable window |
+| `/slotcast probe chat` | same report printed to chat instead |
 | `/slotcast status` | version, source bar, managed frame count, bindings and their cast strings |
 | `/slotcast rank slot\|highest` | default rank handling for all slots |
 | `/slotcast castmode spell\|macro` | how casts are emitted; switch if ranked casts don't fire |

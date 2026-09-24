@@ -443,6 +443,7 @@ local function BuildWindow()
     f:SetSize(640, 480)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
+    f:SetToplevel(true)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
@@ -488,7 +489,9 @@ local function BuildWindow()
     edit:SetMultiLine(true)
     edit:SetAutoFocus(false)
     edit:SetMaxLetters(0)
-    edit:SetWidth(600)
+    -- A scroll child needs a real rect before SetScrollChild; a multiline box
+    -- grows past this once the text lands.
+    edit:SetSize(600, 400)
     edit:SetFontObject(_G.ChatFontNormal or "GameFontHighlightSmall")
     edit:SetScript("OnEscapePressed", function() f:Hide() end)
     -- A copy box is read-only in spirit: typing in it would only corrupt the
@@ -507,22 +510,61 @@ local function BuildWindow()
 
     f.edit = edit
     f:Hide()
+
+    -- Escape should close it like any other panel.
+    if type(_G.UISpecialFrames) == "table" then
+        tinsert(_G.UISpecialFrames, "SlotCastProbeWindow")
+    end
+
     return f
 end
 
-function Probe.Show()
-    local text = Probe.Build()
+local function PrintToChat(text)
+    ns.Print("probe follows. Widen the chat frame, then drag-select it, or read")
+    ns.Print("it from WTF/Account/<account>/SavedVariables/SlotCast.lua after /reload.")
+    for line in text:gmatch("[^\n]*") do
+        if line ~= "" then print(line) end
+    end
+end
 
-    -- Also stash it where it survives a /reload, in case the window's copy
-    -- comes out truncated: WTF/Account/<account>/SavedVariables/SlotCast.lua
+-- `forceChat` is /slotcast probe chat.
+function Probe.Show(forceChat)
+    local ok, text = pcall(Probe.Build)
+    if not ok then
+        ns.Warn("probe failed while collecting data: %s", tostring(text))
+        return
+    end
+
+    -- Stash it where it survives a /reload regardless of what the window does:
+    -- WTF/Account/<account>/SavedVariables/SlotCast.lua
     ns.db.lastProbe = text
 
-    window = window or BuildWindow()
-    window.reportText = text
-    window.edit:SetText(text)
-    window:Show()
-    window.edit:SetFocus()
-    window.edit:HighlightText()
+    local lineCount = select(2, text:gsub("\n", "\n")) + 1
 
-    ns.Print("probe ready - Ctrl+A, Ctrl+C to copy. Also saved to SavedVariables as lastProbe (after /reload).")
+    if forceChat then
+        PrintToChat(text)
+        ns.Print("probe: %d lines, also saved as lastProbe.", lineCount)
+        return
+    end
+
+    -- The window is built from plain frames, but if it fails on this client the
+    -- report still has to reach the user somehow.
+    local built, err = pcall(function()
+        window = window or BuildWindow()
+        window.reportText = text
+        window.edit:SetText(text)
+        window:Show()
+        window.edit:SetFocus()
+        window.edit:HighlightText()
+    end)
+
+    if not built then
+        ns.Warn("could not open the copy window (%s) - falling back to chat.", tostring(err))
+        PrintToChat(text)
+        ns.Print("probe: %d lines, also saved as lastProbe.", lineCount)
+        return
+    end
+
+    ns.Print("probe ready: %d lines. Ctrl+A then Ctrl+C in the window to copy.", lineCount)
+    ns.Print("Also saved to SavedVariables as lastProbe, and |cffffff00/slotcast probe chat|r prints it here.")
 end
