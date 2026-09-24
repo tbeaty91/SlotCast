@@ -82,6 +82,23 @@ slot instead.
 vehicles. SlotCast follows the visible page so the binding matches what you see,
 but that means the binding changes when the page does. Use bars 6–8.
 
+## Mapping the bar's shape onto clicks
+
+Edit Mode can lay a bar out as a grid — 3 columns by 4 rows, say. That shape can
+be the binding scheme: columns are Left / Middle / Right, rows are no modifier /
+Shift / Ctrl / Alt. Twelve clicks, and the bar on screen is the reference card.
+
+**Map grid to clicks** in the options panel does exactly that in one press.
+
+It does not assume a fold order. The order slots fill a given Edit Mode shape
+differs between clients, so SlotCast reads where the buttons actually sit on
+screen and clusters them into rows and columns. Reshape the bar and press it
+again; the mapping follows. Each slot row in the panel is labelled with the cell
+it occupies (`r2c3`), and the header shows the detected shape.
+
+It replaces slot bindings only — target, menu and the other unit-frame actions
+are a separate decision and are left alone.
+
 ## Spell ranks
 
 On a client with Classic-style spell ranks, every action slot holds one specific

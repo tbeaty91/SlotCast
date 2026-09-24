@@ -138,6 +138,78 @@ function Slots.OwnsSlot(slot)
 end
 
 ------------------------------------------------------------------------------
+-- visual grid
+--
+-- Edit Mode lets a bar be laid out as rows x columns, and the order slots fill
+-- that shape differs between clients. Rather than hard-code a fold order (which
+-- would also break the moment the bar is reshaped), read where the buttons
+-- actually are on screen and cluster them into rows and columns. This measures
+-- the real layout on any client, including ones that did not exist when this
+-- was written.
+------------------------------------------------------------------------------
+
+-- Returns grid (slot index -> {row, col}), rowCount, colCount -- or nil.
+function Slots.GridLayout(bar)
+    bar = bar or (ns.db and ns.db.bar) or 8
+    local prefix = BAR_BUTTON[bar]
+    if not prefix then return nil end
+
+    local points, w, h = {}, nil, nil
+    for index = 1, ns.SLOTS_PER_BAR do
+        local button = _G[prefix .. index]
+        if type(button) == "table" and not (button.IsForbidden and button:IsForbidden()) then
+            local ok, x, y = pcall(function() return button:GetCenter() end)
+            if ok and type(x) == "number" and type(y) == "number" then
+                points[#points + 1] = { index = index, x = x, y = y }
+                if not w then
+                    local okw, bw, bh = pcall(function() return button:GetWidth(), button:GetHeight() end)
+                    if okw then w, h = bw, bh end
+                end
+            end
+        end
+    end
+
+    if #points < 2 then return nil end
+
+    -- Half a button is a forgiving threshold: comfortably larger than the gap
+    -- within a row, comfortably smaller than the step between rows.
+    local tolY = math.max(4, (h or 30) * 0.5)
+    local tolX = math.max(4, (w or 30) * 0.5)
+
+    -- Cluster both axes globally rather than per row, so a ragged final row
+    -- still lands in the right columns.
+    local byY = {}
+    for i, p in ipairs(points) do byY[i] = p end
+    table.sort(byY, function(a, b) return a.y > b.y end)  -- top row first
+    local row, lastY = 0, nil
+    for _, p in ipairs(byY) do
+        if lastY == nil or math.abs(p.y - lastY) > tolY then
+            row = row + 1
+            lastY = p.y
+        end
+        p.row = row
+    end
+
+    local byX = {}
+    for i, p in ipairs(points) do byX[i] = p end
+    table.sort(byX, function(a, b) return a.x < b.x end)  -- left column first
+    local col, lastX = 0, nil
+    for _, p in ipairs(byX) do
+        if lastX == nil or math.abs(p.x - lastX) > tolX then
+            col = col + 1
+            lastX = p.x
+        end
+        p.col = col
+    end
+
+    local grid = {}
+    for _, p in ipairs(points) do
+        grid[p.index] = { row = p.row, col = p.col }
+    end
+    return grid, row, col
+end
+
+------------------------------------------------------------------------------
 -- combos
 ------------------------------------------------------------------------------
 

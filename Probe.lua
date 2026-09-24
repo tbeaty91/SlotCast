@@ -13,7 +13,7 @@ local ADDON, ns = ...
 ns.Probe = {}
 local Probe = ns.Probe
 
-local REPORT_VERSION = 3
+local REPORT_VERSION = 4
 
 ------------------------------------------------------------------------------
 -- report building
@@ -152,6 +152,41 @@ local function ProbeBars()
         else
             addf("  bar %s (%s1): ABSENT (%s)", bar, prefix, how)
         end
+    end
+
+    -- The visual grid, measured from where the buttons actually sit. This is
+    -- what differs between clients: the same Edit Mode shape can fill in a
+    -- different order, so slot 4 may be row 1 col 4 on one client and row 2
+    -- col 1 on another.
+    local grid, rows, cols = ns.Slots.GridLayout()
+    if grid then
+        addf("  source bar %s visual grid: %s columns x %s rows", ns.db.bar, cols, rows)
+        local cells = {}
+        for index = 1, ns.SLOTS_PER_BAR do
+            local cell = grid[index]
+            cells[#cells + 1] = cell and ("%d=r%dc%d"):format(index, cell.row, cell.col)
+                                      or ("%d=?"):format(index)
+        end
+        addf("    %s", table.concat(cells, "  "))
+
+        -- Same thing drawn as the grid, which makes the fold order obvious.
+        for r = 1, rows do
+            local line = {}
+            for c = 1, cols do
+                local found = "  ."
+                for index = 1, ns.SLOTS_PER_BAR do
+                    local cell = grid[index]
+                    if cell and cell.row == r and cell.col == c then
+                        found = ("%3d"):format(index)
+                        break
+                    end
+                end
+                line[#line + 1] = found
+            end
+            addf("    row %s: %s", r, table.concat(line, " "))
+        end
+    else
+        addf("  source bar %s: could not read button positions (bar disabled?)", ns.db.bar)
     end
 
     -- How high do action slots actually go on this client?

@@ -19,6 +19,7 @@ local RIGHT_X  = 336
 local panel, category, standalone, settingsHost
 local barButtons, specialRows, slotRows = {}, {}, {}
 local warningText, conflictText, slotHeader, rankDefaultLabel
+local gridCache
 local rankDefaultButtons = {}
 
 ------------------------------------------------------------------------------
@@ -115,6 +116,62 @@ local function Assign(target, combo)
 
     ns.Refresh(true)
 end
+
+------------------------------------------------------------------------------
+-- auto-mapping the visual grid
+--
+-- Columns become mouse buttons left to right; rows become modifier sets top to
+-- bottom. A bar shaped 3 wide by 4 tall then reads exactly as it looks: top row
+-- plain, second row Shift, third Ctrl, fourth Alt. Because the grid is measured
+-- from the buttons' real positions, this produces the same result whatever
+-- order a given client folds its bars in.
+------------------------------------------------------------------------------
+
+local COL_BUTTONS = { 1, 3, 2, 4, 5 }  -- left, middle, right, then side buttons
+
+local ROW_MODS = {
+    { false, false, false },  -- (none)
+    { false, false, true  },  -- Shift
+    { false, true,  false },  -- Ctrl
+    { true,  false, false },  -- Alt
+    { false, true,  true  },  -- Ctrl + Shift
+    { true,  false, true  },  -- Alt + Shift
+    { true,  true,  false },  -- Alt + Ctrl
+    { true,  true,  true  },  -- Alt + Ctrl + Shift
+}
+
+local function AutoMapGrid()
+    local grid, rows, cols = ns.Slots.GridLayout()
+    if not grid then
+        ns.Warn("could not read the bar's layout - is bar %s enabled in Edit Mode?", ns.db.bar)
+        return
+    end
+
+    -- Replace slot bindings only. Target/menu and friends are a separate
+    -- decision and are left exactly as they are.
+    for combo, value in pairs(ns.db.binds) do
+        if type(value) == "number" then ns.db.binds[combo] = nil end
+    end
+
+    local mapped, skipped = 0, 0
+    for index = 1, ns.SLOTS_PER_BAR do
+        local cell = grid[index]
+        if cell and COL_BUTTONS[cell.col] and ROW_MODS[cell.row] then
+            local mods = ROW_MODS[cell.row]
+            ns.db.binds[ns.MakeCombo(COL_BUTTONS[cell.col], mods[1], mods[2], mods[3])] = index
+            mapped = mapped + 1
+        elseif cell then
+            skipped = skipped + 1
+        end
+    end
+
+    ns.Print("mapped a %dx%d grid: %d slot(s) bound%s.",
+        cols, rows, mapped,
+        skipped > 0 and (", %d outside the 5-column / 8-row range"):format(skipped) or "")
+    ns.Refresh(true)
+end
+
+Options.AutoMapGrid = AutoMapGrid
 
 ------------------------------------------------------------------------------
 -- rows
@@ -227,10 +284,14 @@ local function UpdateRow(row)
         end
     end
 
+    local cell = gridCache and gridCache[row.target]
+    local where = cell and ("|cff6699ccr%dc%d|r"):format(cell.row, cell.col)
+                  or ("|cff808080%d.|r"):format(row.target)
+
     local name = spec and spec.label or "|cff606060empty|r"
     if spec and spec.unsupported then name = "|cffff6060" .. (spec.label or "?") .. "|r" end
     if spec and spec.note and not spec.unsupported then name = name .. " |cffffcc00*|r" end
-    row.label:SetText(("|cff808080%d.|r %s"):format(row.target, name))
+    row.label:SetText(("%s %s"):format(where, name))
 end
 
 ------------------------------------------------------------------------------
@@ -400,6 +461,21 @@ local function BuildPanel()
         slotRows[i] = row
     end
 
+    local autoMap = PushButton(panel, COL_W, 22, "Map grid to clicks")
+    autoMap:SetPoint("TOPLEFT", RIGHT_X, -426)
+    autoMap:SetScript("OnClick", AutoMapGrid)
+    autoMap:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Map the bar's shape onto clicks")
+        GameTooltip:AddLine("Columns become Left, Middle, Right (then buttons 4 and 5).", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("Rows become no modifier, Shift, Ctrl, Alt.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Read from where the buttons actually sit on screen, so it works whatever order this client folds bars in.", 0.5, 0.8, 1, true)
+        GameTooltip:AddLine("Replaces existing slot bindings. Target/menu are left alone.", 1, 0.6, 0.2, true)
+        GameTooltip:Show()
+    end)
+    autoMap:SetScript("OnLeave", GameTooltip_Hide)
+
     return panel
 end
 
@@ -487,6 +563,13 @@ function Options.RefreshDisplay()
     end
 
     slotHeader:SetText(ns.BAR_NAMES[ns.db.bar] or ("Bar " .. ns.db.bar))
+
+    local grid, gridRows, gridCols = ns.Slots.GridLayout()
+    gridCache = grid
+    if grid then
+        slotHeader:SetText(("%s  |cff6699cc%dx%d|r"):format(
+            ns.BAR_NAMES[ns.db.bar] or ("Bar " .. ns.db.bar), gridCols, gridRows))
+    end
 
     -- The rank controls are meaningless on a client without spell ranks, so
     -- only show them once a ranked spell actually turns up on the bar.
