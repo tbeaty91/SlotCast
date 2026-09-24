@@ -95,6 +95,11 @@ ns.defaults = {
     rankMode      = "slot",
     rankOverrides = {},
 
+    -- How "Map grid to clicks" reads a bar's shape. Neither is more correct;
+    -- a 3-wide bar wants columns as buttons, a 3-tall one wants rows.
+    gridTranspose   = false,      -- false: columns are mouse buttons
+    gridButtonOrder = "LMR",      -- or "LRM", for people who find middle-click awkward
+
     -- "spell" uses type="spell" so the secure handler supplies the unit.
     -- "macro" falls back to /cast [@mouseover] if a client's CastSpellByName
     -- will not take the "Name(Rank N)" form.

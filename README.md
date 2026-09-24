@@ -88,16 +88,28 @@ Edit Mode can lay a bar out as a grid — 3 columns by 4 rows, say. That shape c
 be the binding scheme: columns are Left / Middle / Right, rows are no modifier /
 Shift / Ctrl / Alt. Twelve clicks, and the bar on screen is the reference card.
 
-**Map grid to clicks** in the options panel does exactly that in one press.
+**Map grid to clicks** in the options panel does exactly that in one press. It's
+a convenience, not the interface: every binding can be set by hand, one click at
+a time, in any combination you like. Nothing requires a grid, or a bar shape, or
+this scheme.
 
 It does not assume a fold order. The order slots fill a given Edit Mode shape
 differs between clients, so SlotCast reads where the buttons actually sit on
-screen and clusters them into rows and columns. Reshape the bar and press it
-again; the mapping follows. Each slot row in the panel is labelled with the cell
-it occupies (`r2c3`), and the header shows the detected shape.
+screen and clusters them into rows and columns. It works on any shape — 3x4,
+4x3, 2x6, a plain row of twelve. Reshape the bar and press it again.
 
-It replaces slot bindings only — target, menu and the other unit-frame actions
-are a separate decision and are left alone.
+Two toggles sit under the button, because neither choice is universal:
+
+| | |
+|---|---|
+| **Columns / Rows = buttons** | which axis carries the mouse button. A 3-wide bar usually wants columns, a 3-tall one rows. Disabled on a single-row bar, which has no axis to choose. |
+| **L M R / L R M** | the order buttons are handed out along that axis. Put middle last if it's awkward on your mouse. |
+
+Modifier rows always run in the canonical order — none, Shift, Ctrl, Alt, then
+the pairs — matching every keybinding UI in the game.
+
+It replaces slot bindings only; target, menu and the other unit-frame actions are
+a separate decision and are left alone.
 
 ## Spell ranks
 

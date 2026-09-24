@@ -19,7 +19,8 @@ local RIGHT_X  = 336
 local panel, category, standalone, settingsHost
 local barButtons, specialRows, slotRows = {}, {}, {}
 local warningText, conflictText, slotHeader, rankDefaultLabel
-local gridCache
+local gridCache, gridIs2D
+local gridAxisButton, gridOrderButton
 local rankDefaultButtons = {}
 
 ------------------------------------------------------------------------------
@@ -127,7 +128,10 @@ end
 -- order a given client folds its bars in.
 ------------------------------------------------------------------------------
 
-local COL_BUTTONS = { 1, 3, 2, 4, 5 }  -- left, middle, right, then side buttons
+local BUTTON_ORDERS = {
+    LMR = { 1, 3, 2, 4, 5 },  -- left, middle, right
+    LRM = { 1, 2, 3, 4, 5 },  -- left, right, middle -- middle-click is awkward on many mice
+}
 
 local ROW_MODS = {
     { false, false, false },  -- (none)
@@ -147,6 +151,8 @@ local function AutoMapGrid()
         return
     end
 
+    local buttons = BUTTON_ORDERS[ns.db.gridButtonOrder] or BUTTON_ORDERS.LMR
+
     -- Replace slot bindings only. Target/menu and friends are a separate
     -- decision and are left exactly as they are.
     for combo, value in pairs(ns.db.binds) do
@@ -156,12 +162,20 @@ local function AutoMapGrid()
     local mapped, skipped = 0, 0
     for index = 1, ns.SLOTS_PER_BAR do
         local cell = grid[index]
-        if cell and COL_BUTTONS[cell.col] and ROW_MODS[cell.row] then
-            local mods = ROW_MODS[cell.row]
-            ns.db.binds[ns.MakeCombo(COL_BUTTONS[cell.col], mods[1], mods[2], mods[3])] = index
-            mapped = mapped + 1
-        elseif cell then
-            skipped = skipped + 1
+        if cell then
+            -- Which axis carries the mouse button is a layout preference, not
+            -- a fact about the bar: a 3-wide grid wants columns, a 3-tall one
+            -- wants rows.
+            local btnAxis = ns.db.gridTranspose and cell.row or cell.col
+            local modAxis = ns.db.gridTranspose and cell.col or cell.row
+
+            if buttons[btnAxis] and ROW_MODS[modAxis] then
+                local mods = ROW_MODS[modAxis]
+                ns.db.binds[ns.MakeCombo(buttons[btnAxis], mods[1], mods[2], mods[3])] = index
+                mapped = mapped + 1
+            else
+                skipped = skipped + 1
+            end
         end
     end
 
@@ -284,9 +298,13 @@ local function UpdateRow(row)
         end
     end
 
+    -- The index is what the slot IS; the cell is only extra orientation,
+    -- and on a plain single row of twelve it is noise.
+    local where = ("|cff808080%d.|r"):format(row.target)
     local cell = gridCache and gridCache[row.target]
-    local where = cell and ("|cff6699ccr%dc%d|r"):format(cell.row, cell.col)
-                  or ("|cff808080%d.|r"):format(row.target)
+    if cell and gridIs2D then
+        where = where .. (" |cff6699ccr%dc%d|r"):format(cell.row, cell.col)
+    end
 
     local name = spec and spec.label or "|cff606060empty|r"
     if spec and spec.unsupported then name = "|cffff6060" .. (spec.label or "?") .. "|r" end
@@ -464,6 +482,7 @@ local function BuildPanel()
     local autoMap = PushButton(panel, COL_W, 22, "Map grid to clicks")
     autoMap:SetPoint("TOPLEFT", RIGHT_X, -426)
     autoMap:SetScript("OnClick", AutoMapGrid)
+    panel.autoMap = autoMap
     autoMap:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Map the bar's shape onto clicks")
@@ -475,6 +494,38 @@ local function BuildPanel()
         GameTooltip:Show()
     end)
     autoMap:SetScript("OnLeave", GameTooltip_Hide)
+
+    -- Which axis carries the mouse button, and where middle-click sits, are
+    -- preferences rather than facts. Two toggles beat a scheme baked in.
+    gridAxisButton = PushButton(panel, 148, 22, "")
+    gridAxisButton:SetPoint("TOPLEFT", RIGHT_X, -450)
+    gridAxisButton:SetScript("OnClick", function()
+        ns.db.gridTranspose = not ns.db.gridTranspose
+        Options.RefreshDisplay()
+    end)
+    gridAxisButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Which axis is the mouse button")
+        GameTooltip:AddLine("A 3-wide bar usually wants columns; a 3-tall one wants rows.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("Press Map again after changing this.", 1, 0.6, 0.2, true)
+        GameTooltip:Show()
+    end)
+    gridAxisButton:SetScript("OnLeave", GameTooltip_Hide)
+
+    gridOrderButton = PushButton(panel, 148, 22, "")
+    gridOrderButton:SetPoint("TOPLEFT", RIGHT_X + 152, -450)
+    gridOrderButton:SetScript("OnClick", function()
+        ns.db.gridButtonOrder = (ns.db.gridButtonOrder == "LMR") and "LRM" or "LMR"
+        Options.RefreshDisplay()
+    end)
+    gridOrderButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Mouse button order")
+        GameTooltip:AddLine("The order buttons are handed out along that axis. Put middle last if it is awkward on your mouse.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("Press Map again after changing this.", 1, 0.6, 0.2, true)
+        GameTooltip:Show()
+    end)
+    gridOrderButton:SetScript("OnLeave", GameTooltip_Hide)
 
     return panel
 end
@@ -566,6 +617,14 @@ function Options.RefreshDisplay()
 
     local grid, gridRows, gridCols = ns.Slots.GridLayout()
     gridCache = grid
+    gridIs2D = grid and gridRows > 1 and gridCols > 1
+
+    gridAxisButton:SetText(ns.db.gridTranspose and "Rows = buttons" or "Columns = buttons")
+    gridOrderButton:SetText(ns.db.gridButtonOrder == "LRM" and "L  R  M" or "L  M  R")
+
+    -- A one-dimensional bar has no axis choice to make.
+    gridAxisButton:SetEnabled(gridIs2D and true or false)
+    gridAxisButton:SetAlpha(gridIs2D and 1 or 0.35)
     if grid then
         slotHeader:SetText(("%s  |cff6699cc%dx%d|r"):format(
             ns.BAR_NAMES[ns.db.bar] or ("Bar " .. ns.db.bar), gridCols, gridRows))
