@@ -208,12 +208,36 @@ local function DescribeSpell(label, id)
         end
     end
 
+    local subtext
     for _, path in ipairs({ "C_Spell.GetSpellSubtext", "GetSpellSubtext" }) do
         local fn = Lookup(path)
         if type(fn) == "function" then
             local ok, value = pcall(fn, id)
             addf("    %s -> %s", path, ok and ("[" .. tostring(value) .. "]") or ("ERROR " .. tostring(value)))
+            if ok and type(value) == "string" and value ~= "" and not subtext then subtext = value end
         end
+    end
+
+    -- The decisive test: can this client resolve "Name(Subtext)"? If yes the
+    -- rank form is real and castable; if no, the subtext is flavour text.
+    local name
+    local getName = Lookup("C_Spell.GetSpellName")
+    if type(getName) == "function" then
+        local ok, value = pcall(getName, id)
+        if ok and type(value) == "string" then name = value end
+    end
+
+    if subtext and name then
+        local candidate = ("%s(%s)"):format(name, subtext)
+        local get = Lookup("C_Spell.GetSpellInfo") or _G.GetSpellInfo
+        local ok, info = pcall(get, candidate)
+        local resolved = "NO"
+        if ok and type(info) == "table" and info.name then
+            resolved = ("YES -> name=%s spellID=%s"):format(tostring(info.name), tostring(info.spellID))
+        elseif ok and type(info) == "string" then
+            resolved = "YES -> " .. info
+        end
+        addf("    ranked form [%s] resolves: %s", candidate, resolved)
     end
 end
 
@@ -301,7 +325,13 @@ local function ProbeSecure()
             end
         end
         addf("  %s frames registered. First few: %s", count, table.concat(names, ", "))
+        if count == 0 then
+            add("  (empty is normal on current retail - Blizzard's frames do not self-register;")
+            add("   SlotCast finds them by name and via the CompactUnitFrame_SetUpFrame hook)")
+        end
     end
+
+    addf("  SlotCast is managing %s frame(s).", ns.Secure and ns.Secure.ManagedCount() or "?")
 
     section("4c. A REAL UNIT FRAME")
     local target

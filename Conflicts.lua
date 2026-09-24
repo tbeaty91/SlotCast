@@ -1,12 +1,22 @@
 -- SlotCast :: Conflicts
--- Detects bindings set in Blizzard's built-in Click Bindings UI (Spellbook ->
--- Click Bindings, retail 10.0+). Those run through their own secure path and
--- will fire *in addition to* ours on the same click, so the overlap needs to be
--- visible rather than mysterious.
+-- Reads bindings set in Blizzard's built-in Click Bindings UI.
 --
--- The exact field names in the ClickBindingInfo struct are the one thing in
--- this addon that cannot be checked outside the game, so every read here is
--- defensive and `/slotcast dump` prints the raw structure for verification.
+-- Field names and enum values here are CONFIRMED against retail 12.1.0 (build
+-- 69933) rather than guessed:
+--
+--   entry = { actionID = number, button = "LeftButton", modifiers = 0, type = 3 }
+--   Enum.ClickBindingType        = { None=0, Spell=1, Macro=2, Interaction=3, PetAction=4 }
+--   Enum.ClickBindingInteraction = { Target=1, OpenContextMenu=2 }
+--
+-- The reads stay defensive anyway, because this has to run on clients that were
+-- never checked.
+--
+-- The important discovery: Blizzard implements these as *wildcard* attributes
+-- (a unit frame carries "*type1 = target", "*type2 = menu"), and a specific
+-- attribute beats a wildcard in SecureButton_GetModifiedAttribute's lookup
+-- order. So a SlotCast binding does not fight a Blizzard one -- it overrides it.
+-- Nothing double-fires, and the two default Interaction entries every client
+-- ships are not a conflict at all.
 
 local ADDON, ns = ...
 
@@ -27,8 +37,8 @@ end
 ------------------------------------------------------------------------------
 
 local BUTTON_FROM_STRING = {
-    BUTTON1 = 1, BUTTON2 = 2, BUTTON3 = 3, BUTTON4 = 4, BUTTON5 = 5,
     LEFTBUTTON = 1, RIGHTBUTTON = 2, MIDDLEBUTTON = 3,
+    BUTTON1 = 1, BUTTON2 = 2, BUTTON3 = 3, BUTTON4 = 4, BUTTON5 = 5,
 }
 
 local function ButtonOf(entry)
@@ -39,40 +49,65 @@ local function ButtonOf(entry)
     return BUTTON_FROM_STRING[up] or tonumber(up:match("BUTTON(%d)") or "")
 end
 
--- Returns alt, ctrl, shift. Prefers the API's own formatter over guessing at
--- the bitfield layout.
+-- Returns alt, ctrl, shift (or nil, nil, nil, rawValue if undecodable).
 local function ModifiersOf(entry)
     local mods = entry.modifiers or entry.modifierMask or 0
+
+    -- Zero is unambiguous and by far the common case; do not make it depend on
+    -- how GetStringFromModifiers formats an empty set.
+    if mods == 0 then return false, false, false end
+
     local api = API()
     if api and type(api.GetStringFromModifiers) == "function" then
         local ok, str = pcall(api.GetStringFromModifiers, mods)
         if ok and type(str) == "string" then
             str = str:upper()
-            return str:find("ALT") ~= nil, (str:find("CTRL") or str:find("CONTROL")) ~= nil, str:find("SHIFT") ~= nil
+            return str:find("ALT") ~= nil,
+                   (str:find("CTRL") or str:find("CONTROL")) ~= nil,
+                   str:find("SHIFT") ~= nil
         end
     end
     return nil, nil, nil, mods
 end
 
+-- Returns a human description and a kind: "interaction" for Blizzard's two
+-- built-in defaults, "action" for anything a user actually chose.
 local function DescribeAction(entry)
     local kind = entry.type
     local id = entry.actionID or entry.actionId or entry.spellID
     local E = _G.Enum and _G.Enum.ClickBindingType
 
-    if E and kind == E.Spell and id then
-        local name = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(id)
-        return "spell: " .. ((name and name.name) or tostring(id))
-    elseif E and kind == E.Macro and id then
-        return "macro: " .. ((GetMacroInfo and GetMacroInfo(id)) or tostring(id))
-    elseif E and kind == E.Interaction then
-        return "interaction"
-    elseif E and kind == E.None then
-        return nil
+    if not E then
+        return ("type %s / id %s"):format(tostring(kind), tostring(id)), "action"
     end
-    return ("type %s / id %s"):format(tostring(kind), tostring(id))
+
+    if kind == E.None then
+        return nil, nil
+
+    elseif kind == E.Spell and id then
+        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(id)
+        return "spell: " .. ((info and info.name) or tostring(id)), "action"
+
+    elseif kind == E.Macro and id then
+        local name = GetMacroInfo and GetMacroInfo(id)
+        return "macro: " .. (name or tostring(id)), "action"
+
+    elseif kind == E.PetAction and id then
+        return "pet action: " .. tostring(id), "action"
+
+    elseif kind == E.Interaction then
+        -- These two are the client's ordinary target / context-menu behaviour
+        -- expressed as click bindings. Every character has them.
+        local I = _G.Enum and _G.Enum.ClickBindingInteraction
+        if I and id == I.Target then return "target unit (default)", "interaction" end
+        if I and id == I.OpenContextMenu then return "unit menu (default)", "interaction" end
+        return "interaction " .. tostring(id), "interaction"
+    end
+
+    return ("type %s / id %s"):format(tostring(kind), tostring(id)), "action"
 end
 
--- Array of { combo = "shift-1" | nil, text = "Shift + Left", action = "spell: Renew", raw = entry }
+-- Array of { combo, text, action, kind, raw }
 function Conflicts.GetBindings()
     if not Conflicts.Available() then return nil end
 
@@ -82,7 +117,7 @@ function Conflicts.GetBindings()
     local out = {}
     for _, entry in ipairs(info) do
         if type(entry) == "table" then
-            local action = DescribeAction(entry)
+            local action, kind = DescribeAction(entry)
             if action then
                 local button = ButtonOf(entry)
                 local alt, ctrl, shift, rawMods = ModifiersOf(entry)
@@ -93,7 +128,7 @@ function Conflicts.GetBindings()
                 else
                     text = ("button %s / modifiers %s"):format(tostring(button or "?"), tostring(rawMods or "?"))
                 end
-                out[#out + 1] = { combo = combo, text = text, action = action, raw = entry }
+                out[#out + 1] = { combo = combo, text = text, action = action, kind = kind, raw = entry }
             end
         end
     end
@@ -104,34 +139,46 @@ end
 -- reporting
 ------------------------------------------------------------------------------
 
--- Returns an array of { text, action, mine } for combos bound on both sides,
--- plus the total count of Blizzard bindings.
+-- Returns: overridden (array of {text, action, kind, mine}), total count.
+-- "Overridden" rather than "conflicting" -- see the note at the top of the file.
 function Conflicts.Find()
     local blizz = Conflicts.GetBindings()
     if not blizz then return nil, 0 end
 
-    local clashes = {}
+    local overridden = {}
     for _, b in ipairs(blizz) do
         if b.combo and ns.db.binds[b.combo] ~= nil then
             local spec = ns.Slots.ResolveBind(ns.db.binds[b.combo])
-            clashes[#clashes + 1] = {
+            overridden[#overridden + 1] = {
                 text   = b.text,
                 action = b.action,
+                kind   = b.kind,
                 mine   = spec and spec.label or "(empty slot)",
             }
         end
     end
-    return clashes, #blizz
+    return overridden, #blizz
+end
+
+-- Only user-chosen bindings are worth mentioning. The two Interaction defaults
+-- are overridden on every character that uses SlotCast at all, and saying so
+-- would be noise on every single login.
+local function RealOverrides(overridden)
+    local out = {}
+    for _, entry in ipairs(overridden or {}) do
+        if entry.kind ~= "interaction" then out[#out + 1] = entry end
+    end
+    return out
 end
 
 function Conflicts.Report(verbose)
     if not Conflicts.Available() then
-        ns.Print("this client has no Blizzard click-binding API to check.")
+        ns.Print("this client has no Blizzard click-binding API.")
         return
     end
 
-    local clashes, total = Conflicts.Find()
-    if not clashes then
+    local overridden, total = Conflicts.Find()
+    if not overridden then
         ns.Print("could not read Blizzard's click bindings.")
         return
     end
@@ -139,37 +186,37 @@ function Conflicts.Report(verbose)
     if verbose then
         ns.Print("Blizzard click bindings: %d", total)
         for _, b in ipairs(Conflicts.GetBindings() or {}) do
-            ns.Print("  %s -> %s", b.text, b.action)
+            ns.Print("  %s -> %s%s", b.text, b.action,
+                b.combo and ns.db.binds[b.combo] ~= nil and " |cffffcc00(SlotCast overrides)|r" or "")
         end
     end
 
-    if #clashes == 0 then
-        if verbose then ns.Print("no overlap with SlotCast bindings.") end
+    local real = RealOverrides(overridden)
+    if #real == 0 then
+        if verbose then ns.Print("nothing of yours is being overridden.") end
         return
     end
 
-    ns.Warn("%d click(s) bound in BOTH Blizzard's Click Bindings and SlotCast:", #clashes)
-    for _, c in ipairs(clashes) do
-        ns.Warn("  %s - Blizzard: %s | SlotCast: %s", c.text, c.action, c.mine)
+    ns.Warn("SlotCast overrides %d of your Blizzard click binding(s):", #real)
+    for _, entry in ipairs(real) do
+        ns.Warn("  %s - Blizzard: %s | SlotCast: %s", entry.text, entry.action, entry.mine)
     end
-    ns.Warn("Both will fire. Clear them in the Spellbook's Click Bindings tab, or use /slotcast to move yours.")
+    ns.Warn("SlotCast wins on those clicks. Unbind one side if that is not what you want.")
 end
 
 function Conflicts.ReportOnLogin()
-    local clashes = Conflicts.Find()
-    if clashes and #clashes > 0 then Conflicts.Report(false) end
+    local overridden = Conflicts.Find()
+    if overridden and #RealOverrides(overridden) > 0 then Conflicts.Report(false) end
 end
 
 function Conflicts.Clear()
     local api = API()
     if not api then return false end
     if type(api.ResetCurrentProfile) == "function" then
-        local ok = pcall(api.ResetCurrentProfile)
-        if ok then return true end
+        if pcall(api.ResetCurrentProfile) then return true end
     end
     if type(api.SetProfileByInfo) == "function" then
-        local ok = pcall(api.SetProfileByInfo, {})
-        if ok then return true end
+        if pcall(api.SetProfileByInfo, {}) then return true end
     end
     return false
 end
@@ -208,8 +255,11 @@ function Conflicts.Dump()
     ns.Print("raw C_ClickBindings.GetProfileInfo():")
     print(DumpValue(info, "  "))
 
-    if _G.Enum and _G.Enum.ClickBindingType then
-        ns.Print("Enum.ClickBindingType:")
-        print(DumpValue(_G.Enum.ClickBindingType, "  "))
+    for _, enumName in ipairs({ "ClickBindingType", "ClickBindingInteraction" }) do
+        local enumTable = _G.Enum and _G.Enum[enumName]
+        if enumTable then
+            ns.Print("Enum.%s:", enumName)
+            print(DumpValue(enumTable, "  "))
+        end
     end
 end

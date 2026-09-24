@@ -441,7 +441,8 @@ function Options.RefreshDisplay()
     end
     local empty = true
     for i = 1, ns.SLOTS_PER_BAR do
-        if HasAction(ns.Slots.SlotFor(i)) then empty = false break end
+        local probe = ns.Slots.SlotFor(i)
+        if probe and HasAction(probe) then empty = false break end
     end
     if empty then
         messages[#messages + 1] = "|cffffcc00This bar is empty. Enable it in Edit Mode and drag spells onto it, then hide or fade it.|r"
@@ -455,19 +456,28 @@ function Options.RefreshDisplay()
     if not ns.Conflicts.Available() then
         conflictText:SetText("|cff808080This client has no built-in click bindings to conflict with.|r")
     else
-        local clashes, total = ns.Conflicts.Find()
-        if not clashes then
+        local overridden, total = ns.Conflicts.Find()
+        if not overridden then
             conflictText:SetText("|cff808080Could not read Blizzard's click bindings.|r")
-        elseif total == 0 then
-            conflictText:SetText("|cff60ff60None set. No conflicts.|r")
-        elseif #clashes == 0 then
-            conflictText:SetText(("|cff60ff60%d set, none overlapping SlotCast.|r"):format(total))
         else
-            local lines = { ("|cffff6060%d of %d overlap SlotCast and will fire as well:|r"):format(#clashes, total) }
-            for _, c in ipairs(clashes) do
-                lines[#lines + 1] = ("  %s - %s"):format(c.text, c.action)
+            -- Blizzard writes these as wildcard attributes ("*type1"), which a
+            -- specific attribute beats, so SlotCast overrides rather than
+            -- collides. The two Interaction entries every character ships with
+            -- are not worth reporting.
+            local real = {}
+            for _, entry in ipairs(overridden) do
+                if entry.kind ~= "interaction" then real[#real + 1] = entry end
             end
-            conflictText:SetText(table.concat(lines, "\n"))
+
+            if #real == 0 then
+                conflictText:SetText(("|cff60ff60%d set, none of yours overridden.|r\n|cff808080SlotCast takes precedence on clicks it binds.|r"):format(total))
+            else
+                local lines = { ("|cffffcc00SlotCast overrides %d of %d:|r"):format(#real, total) }
+                for _, entry in ipairs(real) do
+                    lines[#lines + 1] = ("  %s - %s"):format(entry.text, entry.action)
+                end
+                conflictText:SetText(table.concat(lines, "\n"))
+            end
         end
     end
 end

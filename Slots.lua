@@ -83,17 +83,20 @@ end
 -- First action slot of the given bar. Probing wins; the table below is only a
 -- fallback for the moment before the bars are built, or a client that names its
 -- buttons differently.
+-- Only the ranges that have held across every client go here, and 12.1
+-- confirmed all five. Bars 6-8 are deliberately absent: they sat at 73-108 when
+-- they were introduced and are at 145-180 on 12.1.0, so there is no safe value
+-- to guess. An unprobeable bar reports as unavailable instead, because binding
+-- the wrong action slot is far worse than binding nothing.
 local FALLBACK_BASE = {
     [1] = 1,    -- Action Bar 1  (main bar, page 1)      1-12
     [2] = 61,   -- Action Bar 2  (MultiBarBottomLeft)   61-72
     [3] = 49,   -- Action Bar 3  (MultiBarBottomRight)  49-60
     [4] = 25,   -- Action Bar 4  (MultiBarRight)        25-36
     [5] = 37,   -- Action Bar 5  (MultiBarLeft)         37-48
-    [6] = 73,   -- Action Bar 6  (MultiBar5)            73-84
-    [7] = 85,   -- Action Bar 7  (MultiBar6)            85-96
-    [8] = 97,   -- Action Bar 8  (MultiBar7)            97-108
 }
 
+-- Returns nil when the bar cannot be located on this client.
 function Slots.BaseFor(bar)
     local probed = ProbeBase(bar)
     if probed then return probed end
@@ -113,20 +116,24 @@ function Slots.BaseFor(bar)
         return (page - 1) * ns.SLOTS_PER_BAR + 1
     end
 
-    return FALLBACK_BASE[bar] or 1
+    return FALLBACK_BASE[bar]
 end
 
 -- Kept for display only; BaseFor is the truth.
 ns.BAR_BASE = FALLBACK_BASE
 
--- Absolute action slot for index 1..12 on the configured bar.
+-- Absolute action slot for index 1..12 on the configured bar, or nil if the bar
+-- cannot be located. Every caller must handle nil: no binding beats a wrong one.
 function Slots.SlotFor(index)
-    return Slots.BaseFor(ns.db and ns.db.bar or 8) + index - 1
+    local base = Slots.BaseFor(ns.db and ns.db.bar or 8)
+    if not base then return nil end
+    return base + index - 1
 end
 
 -- Does this absolute slot belong to the bar we are sourcing from?
 function Slots.OwnsSlot(slot)
     local base = Slots.BaseFor(ns.db and ns.db.bar or 8)
+    if not base then return false end
     return slot >= base and slot < base + ns.SLOTS_PER_BAR
 end
 
@@ -231,13 +238,56 @@ local function SpellRank(id)
 
     if type(rank) ~= "string" or rank == "" then return nil end
 
-    -- Retail uses subtext for things that are not ranks at all ("Fire",
-    -- "Holy", a spec name). Casting "Name(Fire)" would simply fail, so only
-    -- treat a subtext as a rank when it carries a number. Guessing wrong in
-    -- this direction is safe: we fall back to the rankless cast.
+    -- Retail uses subtext for all sorts of things that are not ranks: dungeon
+    -- names ("Pit of Saron"), systems ("Skyriding", "Battle Pets") -- and, on
+    -- 12.1, "Battle for Azeroth Pathfinder" whose subtext is literally
+    -- "Rank 2". A digit test alone is not enough.
     if not rank:find("%d") then return nil end
 
     return rank
+end
+
+-- Does "Name(Rank 2)" actually name a spell on this client?
+--
+-- This is the real test, and it replaces guessing. On a client with ranks the
+-- parenthesised form resolves; on retail it does not, which is what keeps
+-- "Battle for Azeroth Pathfinder(Rank 2)" from ever being cast. Failure falls
+-- back to the rankless cast, which is the correct answer on a rankless client.
+local rankedFormCache = {}
+
+local function RankedFormResolves(name, rank)
+    local key = name .. "\1" .. rank
+    local cached = rankedFormCache[key]
+    if cached ~= nil then return cached end
+
+    local candidate = ("%s(%s)"):format(name, rank)
+    local result = false
+
+    local get = (C_Spell and C_Spell.GetSpellInfo) or _G.GetSpellInfo
+    if type(get) == "function" then
+        local ok, info = pcall(get, candidate)
+        if ok then
+            -- C_Spell returns a table; the legacy global returns a name first.
+            if type(info) == "table" then
+                result = info.name ~= nil
+            elseif type(info) == "string" then
+                result = true
+            end
+        end
+    else
+        -- Nothing to verify with. Trust the digit test rather than lose ranks
+        -- entirely on a client that exposes no lookup.
+        result = true
+    end
+
+    rankedFormCache[key] = result
+    return result
+end
+
+ns.RankedFormResolves = RankedFormResolves
+
+function ns.WipeRankCache()
+    wipe(rankedFormCache)
 end
 
 -- "Rank 2" -> "R2", for the cramped options row.
@@ -298,7 +348,7 @@ end
 -- `index` is the 1..12 slot position, needed to look up its rank mode. It is
 -- optional: without it the global default applies.
 function Slots.ReadSlot(slot, index)
-    if not HasAction(slot) then return nil end
+    if not slot or not HasAction(slot) then return nil end
 
     local kind, id = GetActionInfo(slot)
     local icon = GetActionTexture(slot)
@@ -314,6 +364,10 @@ function Slots.ReadSlot(slot, index)
         -- "Renew(Rank 2)" casts that rank exactly; "Renew" casts the highest
         -- rank known. The parentheses are the cast parser's own syntax, so the
         -- rank string has to be the client's localised one, not a rebuilt one.
+        -- A subtext is only usable as a rank if the client can resolve the
+        -- parenthesised form. Anything else is retail-style flavour text.
+        if rank and not RankedFormResolves(name, rank) then rank = nil end
+
         local castString = name
         local label = name
         if rank then
@@ -371,7 +425,7 @@ end
 -- What a bind value resolves to, whether it is a slot index or a special.
 function Slots.ResolveBind(value)
     if type(value) == "number" then
-        return Slots.ReadSlot(Slots.SlotFor(value), value)
+        return Slots.ReadSlot(Slots.SlotFor(value), value)  -- SlotFor may be nil; ReadSlot handles it
     end
     local spec = SPECIAL_SPEC[value]
     if not spec then return nil end
