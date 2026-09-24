@@ -105,9 +105,29 @@ different rank into a slot retunes it without touching the binding at all.
 The rank string comes from the client (`C_Spell.GetSpellSubtext`, falling back
 to `GetSpellSubtext` and Classic's two-return `GetSpellInfo`), never rebuilt by
 hand — the word "Rank" is localised, and the cast parser wants the local one.
-Retail also uses subtext for things that aren't ranks at all ("Fire", "Holy"), so
-a subtext only counts as a rank if it contains a number; anything else falls back
-to the rankless cast, which is the safe direction to be wrong in.
+
+### Telling a rank from flavour text
+
+Retail uses subtext for all sorts of things that aren't ranks — "Pit of Saron",
+"Skyriding", "Battle Pets" — and on 12.1 *Battle for Azeroth Pathfinder* has the
+subtext "Rank 2". So a subtext has to be verified before it can be cast.
+
+The test that looks obvious does not work: asking whether `Name(Subtext)`
+resolves to a spell. `C_Spell.GetSpellInfo` **strips the parenthetical and
+resolves the base name**, so on retail every one of those flavour subtexts came
+back valid. Measured, not assumed.
+
+What a parenthetical cannot fake is changing *which* spell is named. SlotCast
+resolves both forms and compares spell ids:
+
+| | `Renew` | `Renew(Rank 2)` | |
+|---|---|---|---|
+| ranked client | highest rank's id | rank 2's id | different → real rank |
+| rankless client | id X | id X | same → flavour text, cast rankless |
+
+The one case this calls "not a rank" on a genuinely ranked client is a slot
+holding the highest rank, where both forms name the same spell — and casting
+rankless there is identical in effect, so the false negative costs nothing.
 
 ### If ranked casts don't fire
 

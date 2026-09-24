@@ -247,47 +247,59 @@ local function SpellRank(id)
     return rank
 end
 
--- Does "Name(Rank 2)" actually name a spell on this client?
+-- Is "Name(Rank 2)" a real rank selector on this client?
 --
--- This is the real test, and it replaces guessing. On a client with ranks the
--- parenthesised form resolves; on retail it does not, which is what keeps
--- "Battle for Azeroth Pathfinder(Rank 2)" from ever being cast. Failure falls
--- back to the rankless cast, which is the correct answer on a rankless client.
-local rankedFormCache = {}
+-- The obvious test -- does the parenthesised form resolve to a spell -- is
+-- worthless, and retail 12.1 proved it: C_Spell.GetSpellInfo strips the
+-- parenthetical and happily resolves the base name, so
+-- "Revive Battle Pets(Battle Pets)" came back valid. Every non-rank subtext
+-- passed.
+--
+-- What a parenthetical cannot fake is CHANGING which spell is named. On a
+-- client with ranks, "Renew" resolves to the highest rank and "Renew(Rank 2)"
+-- resolves to rank 2 -- different spell ids. On a client without ranks both
+-- resolve to the same id, because the suffix was ignored.
+--
+-- The one case this reports "no" on a genuinely ranked client is a slot holding
+-- the HIGHEST rank, where both forms name the same spell. Casting rankless
+-- there is identical in effect, so the false negative is free.
+local rankFormCache = {}
 
-local function RankedFormResolves(name, rank)
-    local key = name .. "\1" .. rank
-    local cached = rankedFormCache[key]
-    if cached ~= nil then return cached end
-
-    local candidate = ("%s(%s)"):format(name, rank)
-    local result = false
-
-    local get = (C_Spell and C_Spell.GetSpellInfo) or _G.GetSpellInfo
-    if type(get) == "function" then
-        local ok, info = pcall(get, candidate)
-        if ok then
-            -- C_Spell returns a table; the legacy global returns a name first.
-            if type(info) == "table" then
-                result = info.name ~= nil
-            elseif type(info) == "string" then
-                result = true
-            end
-        end
-    else
-        -- Nothing to verify with. Trust the digit test rather than lose ranks
-        -- entirely on a client that exposes no lookup.
-        result = true
+local function ResolveSpellID(identifier)
+    if C_Spell and C_Spell.GetSpellInfo then
+        local ok, info = pcall(C_Spell.GetSpellInfo, identifier)
+        if ok and type(info) == "table" then return info.spellID end
+        return nil
     end
-
-    rankedFormCache[key] = result
-    return result
+    if _G.GetSpellInfo then
+        -- Classic signature: name, rank, icon, castTime, minRange, maxRange, spellID
+        local packed = { pcall(_G.GetSpellInfo, identifier) }
+        if packed[1] and packed[2] then return packed[8] end
+    end
+    return nil
 end
 
-ns.RankedFormResolves = RankedFormResolves
+ns.ResolveSpellID = ResolveSpellID
+
+-- Returns usable, plainID, rankedID (the ids are for diagnostics).
+local function RankIsSelectable(name, rank)
+    local key = name .. "\1" .. rank
+    local cached = rankFormCache[key]
+    if cached ~= nil then return cached[1], cached[2], cached[3] end
+
+    local plainID  = ResolveSpellID(name)
+    local rankedID = ResolveSpellID(("%s(%s)"):format(name, rank))
+
+    local usable = (rankedID ~= nil) and (plainID ~= nil) and (rankedID ~= plainID)
+
+    rankFormCache[key] = { usable, plainID, rankedID }
+    return usable, plainID, rankedID
+end
+
+ns.RankIsSelectable = RankIsSelectable
 
 function ns.WipeRankCache()
-    wipe(rankedFormCache)
+    wipe(rankFormCache)
 end
 
 -- "Rank 2" -> "R2", for the cramped options row.
@@ -364,9 +376,9 @@ function Slots.ReadSlot(slot, index)
         -- "Renew(Rank 2)" casts that rank exactly; "Renew" casts the highest
         -- rank known. The parentheses are the cast parser's own syntax, so the
         -- rank string has to be the client's localised one, not a rebuilt one.
-        -- A subtext is only usable as a rank if the client can resolve the
-        -- parenthesised form. Anything else is retail-style flavour text.
-        if rank and not RankedFormResolves(name, rank) then rank = nil end
+        -- A subtext is only usable as a rank if naming it actually selects a
+        -- different spell than the bare name. Anything else is flavour text.
+        if rank and not RankIsSelectable(name, rank) then rank = nil end
 
         local castString = name
         local label = name

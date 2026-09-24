@@ -13,7 +13,7 @@ local ADDON, ns = ...
 ns.Probe = {}
 local Probe = ns.Probe
 
-local REPORT_VERSION = 2
+local REPORT_VERSION = 3
 
 ------------------------------------------------------------------------------
 -- report building
@@ -218,8 +218,6 @@ local function DescribeSpell(label, id)
         end
     end
 
-    -- The decisive test: can this client resolve "Name(Subtext)"? If yes the
-    -- rank form is real and castable; if no, the subtext is flavour text.
     local name
     local getName = Lookup("C_Spell.GetSpellName")
     if type(getName) == "function" then
@@ -227,17 +225,13 @@ local function DescribeSpell(label, id)
         if ok and type(value) == "string" then name = value end
     end
 
-    if subtext and name then
-        local candidate = ("%s(%s)"):format(name, subtext)
-        local get = Lookup("C_Spell.GetSpellInfo") or _G.GetSpellInfo
-        local ok, info = pcall(get, candidate)
-        local resolved = "NO"
-        if ok and type(info) == "table" and info.name then
-            resolved = ("YES -> name=%s spellID=%s"):format(tostring(info.name), tostring(info.spellID))
-        elseif ok and type(info) == "string" then
-            resolved = "YES -> " .. info
+    if subtext and name and type(ns.RankIsSelectable) == "function" then
+        local ok, usable, plainID, rankedID = pcall(ns.RankIsSelectable, name, subtext)
+        if ok then
+            addf("    rank test [%s(%s)]: plain id=%s ranked id=%s -> %s",
+                name, subtext, tostring(plainID), tostring(rankedID),
+                usable and "RANK" or "not a rank")
         end
-        addf("    ranked form [%s] resolves: %s", candidate, resolved)
     end
 end
 
@@ -273,18 +267,22 @@ local function ProbeRanks()
             local ok, name, sub = pcall(getName, i, bookType)
             if not ok or not name then break end
             if type(sub) == "string" and sub ~= "" then
-                -- Run the SHIPPING guard, not a reimplementation of it. This is
-                -- the single assumption the rank feature rests on: a subtext is
-                -- only treated as a rank if "Name(Subtext)" resolves to a real
-                -- spell. Every line here should read NO on a rankless client --
-                -- a YES means the guard fails open and would cast a bogus
-                -- string on a client that does have ranks.
-                local resolves = "?"
-                if type(ns.RankedFormResolves) == "function" then
-                    local okr, value = pcall(ns.RankedFormResolves, name, sub)
-                    resolves = okr and (value and "YES <-- GUARD FAILS OPEN" or "no") or "ERROR"
+                -- Runs the SHIPPING guard, not a reimplementation. The ids
+                -- are printed because they are the whole test: if naming the
+                -- subtext does not change which spell is selected, the
+                -- parenthetical was ignored and this is not a rank.
+                local verdict, plainID, rankedID = "?", "?", "?"
+                if type(ns.RankIsSelectable) == "function" then
+                    local okr, usable, pid, rid = pcall(ns.RankIsSelectable, name, sub)
+                    if okr then
+                        verdict = usable and "RANK <-- treated as a real rank" or "not a rank"
+                        plainID, rankedID = tostring(pid), tostring(rid)
+                    else
+                        verdict = "ERROR"
+                    end
                 end
-                addf("  book %s: name=[%s] subtext=[%s]  ranked form resolves: %s", i, name, sub, resolves)
+                addf("  book %s: [%s] subtext=[%s]", i, name, sub)
+                addf("      plain id=%s  ranked id=%s  ->  %s", plainID, rankedID, verdict)
                 shown = shown + 1
                 if shown >= 8 then break end
             end
@@ -298,7 +296,7 @@ local function ProbeRanks()
         add("  NO spell in the spellbook has a subtext.")
         add("  -> either this client has no ranks, or ranks are exposed some other way.")
     else
-        add("  (on a client without spell ranks every line above should say 'no')")
+        add("  (without spell ranks, plain id and ranked id must MATCH on every line)")
     end
 end
 
