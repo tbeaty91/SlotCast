@@ -1,0 +1,271 @@
+-- SlotCast :: Slots
+-- Bar number -> action slot range, reading a slot's contents, and turning that
+-- into the secure attributes a click binding needs.
+
+local ADDON, ns = ...
+
+ns.Slots = {}
+local Slots = ns.Slots
+
+------------------------------------------------------------------------------
+-- bar -> first action slot
+--
+-- These ranges are fixed by the client. Note the aliasing: slots 25-72 are both
+-- "pages 3-6 of the main bar" and "the four side/bottom multibars", which is why
+-- bar 1 is the only bar whose visible contents move.
+------------------------------------------------------------------------------
+
+ns.BAR_BASE = {
+    [1] = 1,    -- Action Bar 1  (main bar, page 1)      1-12
+    [2] = 61,   -- Action Bar 2  (MultiBarBottomLeft)   61-72
+    [3] = 49,   -- Action Bar 3  (MultiBarBottomRight)  49-60
+    [4] = 25,   -- Action Bar 4  (MultiBarRight)        25-36
+    [5] = 37,   -- Action Bar 5  (MultiBarLeft)         37-48
+    [6] = 73,   -- Action Bar 6  (MultiBar5)            73-84
+    [7] = 85,   -- Action Bar 7  (MultiBar6)            85-96
+    [8] = 97,   -- Action Bar 8  (MultiBar7)            97-108
+}
+
+ns.BAR_NAMES = {
+    [1] = "Bar 1 (main)",
+    [2] = "Bar 2 (bottom left)",
+    [3] = "Bar 3 (bottom right)",
+    [4] = "Bar 4 (right)",
+    [5] = "Bar 5 (right 2)",
+    [6] = "Bar 6",
+    [7] = "Bar 7",
+    [8] = "Bar 8",
+}
+
+ns.SLOTS_PER_BAR = 12
+
+-- Absolute action slot for index 1..12 on the configured bar.
+function Slots.SlotFor(index)
+    local bar = ns.db and ns.db.bar or 8
+    if bar == 1 then
+        -- The main bar swaps pages on stance, stealth, dragonriding and vehicles.
+        -- Follow what is actually on screen so the binding matches what the user
+        -- sees; ACTIONBAR_PAGE_CHANGED re-runs us when it moves.
+        local page
+        if HasOverrideActionBar and HasOverrideActionBar() and GetOverrideBarIndex then
+            page = GetOverrideBarIndex()
+        elseif HasVehicleActionBar and HasVehicleActionBar() and GetVehicleBarIndex then
+            page = GetVehicleBarIndex()
+        else
+            page = GetActionBarPage() or 1
+        end
+        return (page - 1) * ns.SLOTS_PER_BAR + index
+    end
+    return (ns.BAR_BASE[bar] or 97) + index - 1
+end
+
+-- Does this absolute slot belong to the bar we are sourcing from?
+function Slots.OwnsSlot(slot)
+    for i = 1, ns.SLOTS_PER_BAR do
+        if Slots.SlotFor(i) == slot then return true end
+    end
+    return false
+end
+
+------------------------------------------------------------------------------
+-- combos
+------------------------------------------------------------------------------
+
+ns.BUTTON_NAMES = { [1] = "Left", [2] = "Right", [3] = "Middle", [4] = "Button 4", [5] = "Button 5" }
+
+local BUTTON_FROM_ARG = {
+    LeftButton = 1, RightButton = 2, MiddleButton = 3, Button4 = 4, Button5 = 5,
+}
+
+function ns.ButtonNumber(arg)
+    return BUTTON_FROM_ARG[arg] or tonumber(arg:match("^Button(%d)$") or "")
+end
+
+function ns.MakeCombo(button, alt, ctrl, shift)
+    local p = ""
+    if alt   then p = p .. "alt-"   end
+    if ctrl  then p = p .. "ctrl-"  end
+    if shift then p = p .. "shift-" end
+    return p .. button
+end
+
+-- "alt-shift-1" -> "alt-shift-", "1"
+function ns.SplitCombo(combo)
+    local prefix, button = combo:match("^(.-)(%d+)$")
+    return prefix or "", tonumber(button)
+end
+
+function ns.ComboText(combo)
+    local prefix, button = ns.SplitCombo(combo)
+    local parts = {}
+    if prefix:find("alt-")   then parts[#parts + 1] = "Alt"   end
+    if prefix:find("ctrl-")  then parts[#parts + 1] = "Ctrl"  end
+    if prefix:find("shift-") then parts[#parts + 1] = "Shift" end
+    parts[#parts + 1] = ns.BUTTON_NAMES[button] or ("Button " .. tostring(button))
+    return table.concat(parts, " + ")
+end
+
+------------------------------------------------------------------------------
+-- special (non-slot) bindings
+--
+-- These exist so the ordinary left-click-to-target and right-click-for-menu
+-- behaviour is something you own rather than something you lose. Anything not
+-- listed in the config is left exactly as the unit frame had it.
+------------------------------------------------------------------------------
+
+ns.SPECIALS = {
+    { key = "target", label = "Target unit" },
+    { key = "menu",   label = "Unit menu"   },
+    { key = "focus",  label = "Set focus"   },
+    { key = "assist", label = "Assist unit" },
+    { key = "follow", label = "Follow unit" },
+}
+
+local SPECIAL_SPEC = {
+    target = { type = "target" },
+    menu   = { type = "togglemenu" },
+    focus  = { type = "focus" },
+    assist = { type = "assist" },
+    -- There is no "follow" action type, and RunMacroText gets no unit, so this
+    -- one leans on mouseover -- which is always correct for a click-cast, since
+    -- the cursor is over the frame by definition.
+    follow = { type = "macro", key = "macrotext", value = "/follow [@mouseover,exists]" },
+}
+
+------------------------------------------------------------------------------
+-- reading a slot
+------------------------------------------------------------------------------
+
+local function SpellName(id)
+    if C_Spell and C_Spell.GetSpellInfo then
+        local info = C_Spell.GetSpellInfo(id)
+        return info and info.name
+    end
+    return (GetSpellInfo(id))
+end
+
+-- Returns a spec table describing what to put on the button, or nil for empty.
+--   { type = <secure action type>, key = <payload attribute>, value = <payload>,
+--     label = <human text>, icon = <texture>, note = <caveat for the UI> }
+function Slots.ReadSlot(slot)
+    if not HasAction(slot) then return nil end
+
+    local kind, id = GetActionInfo(slot)
+    local icon = GetActionTexture(slot)
+    if not kind then return nil end
+
+    if kind == "spell" then
+        local name = SpellName(id)
+        if not name then return nil end
+        -- type="spell" is the one that matters: SecureActionButton_OnClick
+        -- resolves the frame's own unit attribute and casts on it, so this
+        -- works on any registered unit frame with no per-frame macro text.
+        return { type = "spell", key = "spell", value = name, label = name, icon = icon }
+
+    elseif kind == "item" then
+        local name = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id))
+                  or (GetItemInfo and GetItemInfo(id))
+                  or ("item:" .. id)
+        return { type = "item", key = "item", value = "item:" .. id, label = name, icon = icon }
+
+    elseif kind == "macro" then
+        local body = GetMacroBody(id) or ""
+        local name = (GetMacroInfo(id)) or ("Macro " .. id)
+        -- A macro gets no unit from the secure handler; it runs exactly as
+        -- typed. Unless it carries its own @mouseover/@target conditional it
+        -- will act on the current target, not the frame you clicked.
+        local note = not body:find("@", 1, true)
+            and "Macro has no @mouseover - it will act on your current target, not the clicked unit."
+            or nil
+        return { type = "macro", key = "macrotext", value = body, label = name, icon = icon, note = note }
+
+    elseif kind == "summonmount" then
+        local mountName = C_MountJournal and C_MountJournal.GetMountInfoByID and (C_MountJournal.GetMountInfoByID(id))
+        if mountName then
+            return { type = "macro", key = "macrotext", value = "/cast " .. mountName, label = mountName, icon = icon }
+        end
+        return { unsupported = true, label = "Mount", icon = icon, note = "Mount could not be resolved." }
+
+    elseif kind == "equipmentset" then
+        local name = tostring(id)
+        return { type = "macro", key = "macrotext", value = "/equipset " .. name, label = "Equip: " .. name, icon = icon }
+
+    elseif kind == "flyout" then
+        return { unsupported = true, label = "Flyout", icon = icon,
+                 note = "Flyouts cannot be click-cast - they need a popup. Put the individual spell in the slot instead." }
+
+    else
+        return { unsupported = true, label = kind, icon = icon,
+                 note = ("Action type '%s' is not supported as a click binding."):format(kind) }
+    end
+end
+
+-- What a bind value resolves to, whether it is a slot index or a special.
+function Slots.ResolveBind(value)
+    if type(value) == "number" then
+        return Slots.ReadSlot(Slots.SlotFor(value))
+    end
+    local spec = SPECIAL_SPEC[value]
+    if not spec then return nil end
+    local label
+    for _, s in ipairs(ns.SPECIALS) do
+        if s.key == value then label = s.label break end
+    end
+    return { type = spec.type, key = spec.key, value = spec.value, label = label or value, special = true }
+end
+
+------------------------------------------------------------------------------
+-- the plan
+--
+-- A flat list of {attribute name, value} pairs that describes the whole binding
+-- set. Building it once and handing the same list to every frame keeps the
+-- secure writes identical across frames and makes restoring originals easy.
+------------------------------------------------------------------------------
+
+ns.PAYLOAD_KEYS = { "spell", "item", "macrotext", "macro", "action" }
+
+Slots.plan = {}
+Slots.planAttrs = {}
+
+function Slots.BuildPlan()
+    local plan, attrs = {}, {}
+
+    local function put(name, value)
+        plan[#plan + 1] = { attr = name, value = value }
+        attrs[name] = true
+    end
+
+    if ns.db.enabled then
+        for combo, value in pairs(ns.db.binds) do
+            local prefix, button = ns.SplitCombo(combo)
+            if button then
+                local spec = Slots.ResolveBind(value)
+                local live = spec and not spec.unsupported and spec.type
+
+                put(prefix .. "type" .. button, live or nil)
+                -- Always write every payload key, nil included. Otherwise a
+                -- stale "shift-spell1" survives a change from spell to item and
+                -- the secure handler picks up the wrong one.
+                for _, key in ipairs(ns.PAYLOAD_KEYS) do
+                    put(prefix .. key .. button, (live and spec.key == key) and spec.value or nil)
+                end
+            end
+        end
+    end
+
+    Slots.plan, Slots.planAttrs = plan, attrs
+    return plan
+end
+
+function Slots.PrintPlan()
+    local n = 0
+    for combo, value in pairs(ns.db.binds) do
+        local spec = Slots.ResolveBind(value)
+        local what = spec and spec.label or "|cff888888empty|r"
+        if spec and spec.unsupported then what = "|cffff5555" .. (spec.label or "?") .. " (unsupported)|r" end
+        local src = type(value) == "number" and ("slot %d"):format(value) or "action"
+        ns.Print("  %s -> %s (%s)", ns.ComboText(combo), what, src)
+        n = n + 1
+    end
+    if n == 0 then ns.Print("  no bindings configured") end
+end
