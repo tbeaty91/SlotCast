@@ -10,21 +10,11 @@ local Slots = ns.Slots
 ------------------------------------------------------------------------------
 -- bar -> first action slot
 --
--- These ranges are fixed by the client. Note the aliasing: slots 25-72 are both
--- "pages 3-6 of the main bar" and "the four side/bottom multibars", which is why
--- bar 1 is the only bar whose visible contents move.
+-- Nothing here is hard-coded if it can be asked for instead. Slot ranges differ
+-- between clients (and the aliasing is genuinely confusing: slots 25-72 are both
+-- "pages 3-6 of the main bar" and "the four side/bottom multibars"), so the real
+-- mapping is read off the action buttons themselves at runtime.
 ------------------------------------------------------------------------------
-
-ns.BAR_BASE = {
-    [1] = 1,    -- Action Bar 1  (main bar, page 1)      1-12
-    [2] = 61,   -- Action Bar 2  (MultiBarBottomLeft)   61-72
-    [3] = 49,   -- Action Bar 3  (MultiBarBottomRight)  49-60
-    [4] = 25,   -- Action Bar 4  (MultiBarRight)        25-36
-    [5] = 37,   -- Action Bar 5  (MultiBarLeft)         37-48
-    [6] = 73,   -- Action Bar 6  (MultiBar5)            73-84
-    [7] = 85,   -- Action Bar 7  (MultiBar6)            85-96
-    [8] = 97,   -- Action Bar 8  (MultiBar7)            97-108
-}
 
 ns.BAR_NAMES = {
     [1] = "Bar 1 (main)",
@@ -39,13 +29,79 @@ ns.BAR_NAMES = {
 
 ns.SLOTS_PER_BAR = 12
 
--- Absolute action slot for index 1..12 on the configured bar.
-function Slots.SlotFor(index)
-    local bar = ns.db and ns.db.bar or 8
+-- The button that owns slot 1 of each bar. Asking the button which action slot
+-- it drives is the only mapping that survives a client we have never seen:
+-- whatever the ranges are, and however many bars exist, the buttons know.
+local BAR_BUTTON = {
+    [1] = "ActionButton",
+    [2] = "MultiBarBottomLeftButton",
+    [3] = "MultiBarBottomRightButton",
+    [4] = "MultiBarRightButton",
+    [5] = "MultiBarLeftButton",
+    [6] = "MultiBar5Button",
+    [7] = "MultiBar6Button",
+    [8] = "MultiBar7Button",
+}
+
+-- Ask bar `bar`'s first button which action slot it is currently driving.
+-- Returns nil if that bar does not exist on this client.
+local function ProbeBase(bar)
+    local name = BAR_BUTTON[bar]
+    if not name then return nil end
+
+    local button = _G[name .. "1"]
+    if type(button) ~= "table" then return nil end
+    if button.IsForbidden and button:IsForbidden() then return nil end
+
+    -- `action` is the field Blizzard's action button mixin keeps up to date;
+    -- the attribute is the secure copy of the same thing. Either will do.
+    local ok, slot = pcall(function() return button.action end)
+    if not ok or type(slot) ~= "number" then
+        if type(button.GetAttribute) ~= "function" then return nil end
+        local ok2, value = pcall(button.GetAttribute, button, "action")
+        slot = ok2 and value or nil
+    end
+
+    if type(slot) == "number" and slot >= 1 then return slot end
+    return nil
+end
+
+-- Does this bar exist on this client at all?
+function Slots.BarExists(bar)
+    return ProbeBase(bar) ~= nil
+end
+
+-- Highest bar number this client actually has.
+function Slots.MaxBar()
+    local max = 0
+    for bar = 1, 8 do
+        if Slots.BarExists(bar) then max = bar end
+    end
+    return max
+end
+
+-- First action slot of the given bar. Probing wins; the table below is only a
+-- fallback for the moment before the bars are built, or a client that names its
+-- buttons differently.
+local FALLBACK_BASE = {
+    [1] = 1,    -- Action Bar 1  (main bar, page 1)      1-12
+    [2] = 61,   -- Action Bar 2  (MultiBarBottomLeft)   61-72
+    [3] = 49,   -- Action Bar 3  (MultiBarBottomRight)  49-60
+    [4] = 25,   -- Action Bar 4  (MultiBarRight)        25-36
+    [5] = 37,   -- Action Bar 5  (MultiBarLeft)         37-48
+    [6] = 73,   -- Action Bar 6  (MultiBar5)            73-84
+    [7] = 85,   -- Action Bar 7  (MultiBar6)            85-96
+    [8] = 97,   -- Action Bar 8  (MultiBar7)            97-108
+}
+
+function Slots.BaseFor(bar)
+    local probed = ProbeBase(bar)
+    if probed then return probed end
+
     if bar == 1 then
-        -- The main bar swaps pages on stance, stealth, dragonriding and vehicles.
-        -- Follow what is actually on screen so the binding matches what the user
-        -- sees; ACTIONBAR_PAGE_CHANGED re-runs us when it moves.
+        -- Bar 1 pages on stance, stealth, dragonriding and vehicles. Probing
+        -- handles that for free (the button reports its current slot); this is
+        -- the arithmetic version for when probing is unavailable.
         local page
         if HasOverrideActionBar and HasOverrideActionBar() and GetOverrideBarIndex then
             page = GetOverrideBarIndex()
@@ -54,17 +110,24 @@ function Slots.SlotFor(index)
         else
             page = GetActionBarPage() or 1
         end
-        return (page - 1) * ns.SLOTS_PER_BAR + index
+        return (page - 1) * ns.SLOTS_PER_BAR + 1
     end
-    return (ns.BAR_BASE[bar] or 97) + index - 1
+
+    return FALLBACK_BASE[bar] or 1
+end
+
+-- Kept for display only; BaseFor is the truth.
+ns.BAR_BASE = FALLBACK_BASE
+
+-- Absolute action slot for index 1..12 on the configured bar.
+function Slots.SlotFor(index)
+    return Slots.BaseFor(ns.db and ns.db.bar or 8) + index - 1
 end
 
 -- Does this absolute slot belong to the bar we are sourcing from?
 function Slots.OwnsSlot(slot)
-    for i = 1, ns.SLOTS_PER_BAR do
-        if Slots.SlotFor(i) == slot then return true end
-    end
-    return false
+    local base = Slots.BaseFor(ns.db and ns.db.bar or 8)
+    return slot >= base and slot < base + ns.SLOTS_PER_BAR
 end
 
 ------------------------------------------------------------------------------

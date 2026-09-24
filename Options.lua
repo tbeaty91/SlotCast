@@ -232,7 +232,12 @@ local function BuildPanel()
         btn:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(ns.BAR_NAMES[i])
-            GameTooltip:AddLine(("action slots %d-%d"):format(ns.BAR_BASE[i], ns.BAR_BASE[i] + 11), 0.8, 0.8, 0.8)
+            if ns.Slots.BarExists(i) then
+                local base = ns.Slots.BaseFor(i)
+                GameTooltip:AddLine(("action slots %d-%d"):format(base, base + ns.SLOTS_PER_BAR - 1), 0.8, 0.8, 0.8)
+            else
+                GameTooltip:AddLine("not present on this client", 1, 0.4, 0.4)
+            end
             GameTooltip:Show()
         end)
         btn:SetScript("OnLeave", GameTooltip_Hide)
@@ -323,6 +328,9 @@ function Options.RefreshDisplay()
     panel.enable:SetChecked(ns.db.enabled)
 
     for i = 1, 8 do
+        local exists = ns.Slots.BarExists(i)
+        barButtons[i]:SetEnabled(exists)
+        barButtons[i]:SetAlpha(exists and 1 or 0.35)
         barButtons[i].sel:SetShown(ns.db.bar == i)
     end
 
@@ -333,6 +341,9 @@ function Options.RefreshDisplay()
 
     -- bar warnings
     local messages = {}
+    if not ns.Slots.BarExists(ns.db.bar) then
+        messages[#messages + 1] = ("|cffff6060This client has no bar %d. Pick one of the bars still lit above.|r"):format(ns.db.bar)
+    end
     if ns.db.bar == 1 then
         messages[#messages + 1] = "|cffffcc00Bar 1 changes pages on stance, stealth, dragonriding and vehicles, so its slots move under your bindings. Bars 6-8 never page.|r"
     end

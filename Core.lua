@@ -122,6 +122,18 @@ end
 function handlers.PLAYER_LOGIN()
     ns.Secure.Init()
     ns.Options.Init()
+
+    -- The default source bar is 8, which not every client has.
+    if not ns.Slots.BarExists(ns.db.bar) then
+        local fallback = ns.Slots.MaxBar()
+        if fallback > 0 then
+            ns.Warn("bar %d is not present on this client - falling back to bar %d.", ns.db.bar, fallback)
+            ns.db.bar = fallback
+        else
+            ns.Warn("no action bars found. Slot bindings are disabled until one exists.")
+        end
+    end
+
     ns.Refresh(true)
 
     -- Blizzard's own click bindings run in a separate secure path and will fire

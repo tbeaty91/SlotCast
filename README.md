@@ -75,6 +75,39 @@ slot instead.
 vehicles. SlotCast follows the visible page so the binding matches what you see,
 but that means the binding changes when the page does. Use bars 6–8.
 
+## Other clients
+
+SlotCast does not hard-code which bars exist or which action slots they own. It
+asks each bar's first button which slot it is driving (`ActionButton1`,
+`MultiBar5Button1`, ...) and derives the range from that, so a client with a
+different slot layout, or fewer bars, maps correctly without a code change. Bars
+the client doesn't have are greyed out in the options panel, and the default
+source bar falls back to the highest one that exists.
+
+Everything version-specific is feature-detected rather than assumed:
+
+| Depends on | If absent |
+|---|---|
+| `C_ClickBindings` (retail 10.0+) | conflict panel says there's nothing to conflict with |
+| `Settings.RegisterCanvasLayoutCategory` (10.0+) | falls back to `InterfaceOptions_AddCategory` |
+| `C_Spell.GetSpellInfo` (11.0+) | falls back to `GetSpellInfo` |
+| `CompactUnitFrame_SetUpFrame` | named-frame sweep still runs |
+| `UIPanelButtonTemplate` | hand-built button |
+
+The TOC deliberately carries no `AllowLoadGameType` line, which would otherwise
+stop the addon loading on any client that reports a different game type.
+
+What it genuinely requires is the secure-action engine: `SecureActionButtonTemplate`,
+`SetAttribute`, the `alt-ctrl-shift-` modifier prefix convention, and the
+`ClickCastFrames` registry. That set has been stable for roughly fifteen years and
+is the same foundation Clique runs on — **if Clique works on a client, SlotCast's
+core will too.** The fragile parts are isolated in `Conflicts.lua` and `Options.lua`,
+and both degrade rather than error.
+
+No addon works forever; Blizzard breaks the addon API on a schedule (11.0 deleted
+the entire dropdown widget system, which is why this one draws its own). But
+nothing here is built on a surface that moves often.
+
 ## Blizzard's built-in Click Bindings
 
 Retail has its own click-casting (Spellbook → Click Bindings). It runs through a
