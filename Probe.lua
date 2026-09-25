@@ -169,7 +169,9 @@ local function ProbeBars()
         end
         addf("    %s", table.concat(cells, "  "))
 
-        -- Same thing drawn as the grid, which makes the fold order obvious.
+        -- Drawn as the grid, which makes the fill order obvious: the same shape
+        -- can come from two different Edit Mode settings with the slots laid
+        -- out differently inside it.
         for r = 1, rows do
             local line = {}
             for c = 1, cols do
@@ -184,6 +186,21 @@ local function ProbeBars()
                 line[#line + 1] = found
             end
             addf("    row %s: %s", r, table.concat(line, " "))
+        end
+
+        -- And the click each cell will get, which is what actually matters.
+        local axis = ns.ResolvedGridAxis(rows, cols)
+        addf("    button axis: %s", axis)
+        for index = 1, ns.SLOTS_PER_BAR do
+            local cell = grid[index]
+            if cell then
+                local combo
+                for c, value in pairs(ns.db.binds) do
+                    if value == index then combo = c break end
+                end
+                addf("      slot %s (r%sc%s) -> %s", index, cell.row, cell.col,
+                    combo and ns.ComboText(combo) or "unbound")
+            end
         end
     else
         addf("  source bar %s: could not read button positions (bar disabled?)", ns.db.bar)

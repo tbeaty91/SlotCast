@@ -676,12 +676,12 @@ local function BuildPanel()
     -- mouse buttons because buttons are scarcer than modifiers. This just says
     -- what it worked out, so the mapping is never a surprise.
     gridAxisLabel = Label(panel, "", "GameFontDisableSmall")
-    gridAxisLabel:SetPoint("TOPLEFT", RIGHT_X, -454)
-    gridAxisLabel:SetWidth(148)
+    gridAxisLabel:SetPoint("TOPLEFT", RIGHT_X, -476)
+    gridAxisLabel:SetWidth(COL_W)
     gridAxisLabel:SetJustifyV("TOP")
 
     gridOrderButton = PushButton(panel, 148, 22, "")
-    gridOrderButton:SetPoint("TOPLEFT", RIGHT_X + 152, -450)
+    gridOrderButton:SetPoint("TOPLEFT", RIGHT_X, -450)
     gridOrderButton:SetScript("OnClick", function()
         ns.db.gridButtonOrder = (ns.db.gridButtonOrder == "LMR") and "LRM" or "LMR"
         Options.RefreshDisplay()
@@ -793,9 +793,25 @@ function Options.RefreshDisplay()
 
     gridOrderButton:SetText(ns.db.gridButtonOrder == "LRM" and "L  R  M" or "L  M  R")
 
+    -- Spell out the whole mapping rather than naming an axis. Two different
+    -- Edit Mode settings can produce the same shape, so "columns are buttons"
+    -- on its own does not tell you what a click will do.
     local axis, forced = ns.ResolvedGridAxis(gridRows, gridCols)
-    local axisText = (axis == "enumerate") and "slots map in order"
-                  or ((axis == "col") and "columns are buttons" or "rows are buttons")
+    local buttonWord = (ns.db.gridButtonOrder == "LRM") and "Left / Right / Middle"
+                                                        or "Left / Middle / Right"
+    local axisText
+    if not grid then
+        axisText = "bar layout not readable"
+    elseif axis == "enumerate" then
+        axisText = ("%d slots map in reading order: %s, then the same with Shift, Ctrl, Alt.")
+            :format(#slotRows, buttonWord)
+    elseif axis == "col" then
+        axisText = ("%d wide x %d tall - columns are %s, rows are none / Shift / Ctrl / Alt.")
+            :format(gridCols, gridRows, buttonWord)
+    else
+        axisText = ("%d wide x %d tall - rows are %s, columns are none / Shift / Ctrl / Alt.")
+            :format(gridCols, gridRows, buttonWord)
+    end
     gridAxisLabel:SetText(("|cff808080%s%s|r"):format(axisText, forced and " (forced)" or ""))
     if grid then
         slotHeader:SetText(("%s  |cff6699cc%dx%d|r"):format(
