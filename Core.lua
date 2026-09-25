@@ -106,6 +106,10 @@ ns.defaults = {
     -- client where that system does not exist or does not work.
     blizzDelegate = "auto",
 
+    -- Suppresses the "bind these in Click Bindings" dialog once the user has
+    -- read it. Cleared by /slotcast blizz manual, which is an explicit ask.
+    hideClickcastingNotice = false,
+
     -- Which secure action type opens the unit menu. "auto" picks "menu" only
     -- when the frame has a menu function for SecureUnitButton_OnClick to call,
     -- and "togglemenu" otherwise. Override if a client wants the other one.
@@ -409,6 +413,9 @@ function Dispatch(cmd, rest, restRaw)
             ns.Print("Target and Unit menu are %s.",
                 rest == "off" and "bound by SlotCast" or "read from Blizzard's click bindings")
         elseif rest == "manual" or rest == "help" or rest == "" then
+            -- Asking for the instructions explicitly overrides having dismissed
+            -- them before.
+            ns.db.hideClickcastingNotice = false
             ns.Conflicts.ExplainManualBinding(nil, "menu")
         else
             ns.Print("usage: |cffffff00/slotcast blizz auto|off|r (current: %s), or |cffffff00blizz manual|r for the steps.",

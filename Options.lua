@@ -84,6 +84,85 @@ local function CheckBox(parent, text)
 end
 
 ------------------------------------------------------------------------------
+-- notice dialog
+--
+-- Hand-rolled rather than StaticPopup, for the same reason the rest of this
+-- file is: fewer moving parts that Blizzard can rename underneath us.
+------------------------------------------------------------------------------
+
+local notice
+
+local function BuildNotice()
+    local f = CreateFrame("Frame", "SlotCastNotice", UIParent)
+    f:SetSize(440, 280)
+    f:SetPoint("CENTER", 0, 140)
+    f:SetFrameStrata("FULLSCREEN_DIALOG")
+    f:SetToplevel(true)
+    f:EnableMouse(true)
+    f:SetMovable(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+
+    local bg = f:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.95)
+
+    local edge = f:CreateTexture(nil, "BORDER")
+    edge:SetPoint("TOPLEFT", 1, -1)
+    edge:SetPoint("BOTTOMRIGHT", -1, 1)
+    edge:SetColorTexture(1, 0.82, 0, 0.8)
+
+    local inner = f:CreateTexture(nil, "ARTWORK")
+    inner:SetPoint("TOPLEFT", 3, -3)
+    inner:SetPoint("BOTTOMRIGHT", -3, 3)
+    inner:SetColorTexture(0.06, 0.06, 0.08, 1)
+
+    f.title = Label(f, "", "GameFontNormalLarge")
+    f.title:SetPoint("TOPLEFT", 18, -16)
+    f.title:SetWidth(404)
+
+    f.body = Label(f, "", "GameFontHighlight")
+    f.body:SetPoint("TOPLEFT", 18, -48)
+    f.body:SetWidth(404)
+    f.body:SetJustifyV("TOP")
+    f.body:SetSpacing(3)
+
+    f.dontShow = CheckBox(f, "Don't show this again")
+    f.dontShow:SetPoint("BOTTOMLEFT", 18, 18)
+    f.dontShow:SetScript("OnClick", function(self)
+        if f.suppressKey then
+            ns.db[f.suppressKey] = not ns.db[f.suppressKey]
+            self:SetChecked(ns.db[f.suppressKey])
+        end
+    end)
+
+    f.ok = PushButton(f, 100, 24, "Got it")
+    f.ok:SetPoint("BOTTOMRIGHT", -18, 14)
+    f.ok:SetScript("OnClick", function() f:Hide() end)
+
+    f:Hide()
+    if type(_G.UISpecialFrames) == "table" then
+        tinsert(_G.UISpecialFrames, "SlotCastNotice")
+    end
+    return f
+end
+
+-- `suppressKey` is a saved-variable name; when set, the dialog offers a
+-- "don't show this again" box and honours it.
+function ns.ShowNotice(title, body, suppressKey)
+    if suppressKey and ns.db[suppressKey] then return end
+
+    notice = notice or BuildNotice()
+    notice.suppressKey = suppressKey
+    notice.title:SetText(title)
+    notice.body:SetText(body)
+    notice.dontShow:SetShown(suppressKey ~= nil)
+    notice.dontShow:SetChecked(suppressKey and ns.db[suppressKey])
+    notice:Show()
+end
+
+------------------------------------------------------------------------------
 -- binding assignment
 ------------------------------------------------------------------------------
 
@@ -302,7 +381,7 @@ local function UpdateRow(row)
     if ns.BlizzardOwns(row.target) then
         local text = ns.Conflicts.BindingTextFor(row.target)
         row.blizzardOwned = true
-        row.capture:SetText(text and ("|cff80c0ff" .. text .. "|r") or "|cff808080not set|r")
+        row.capture:SetText(text and ("|cff80c0ff" .. text .. "|r") or "|cffffcc00click to set|r")
         row.capture:SetEnabled(true)
         row.clear:SetEnabled(false)
         row.clear:SetAlpha(0.25)
@@ -429,14 +508,14 @@ local function BuildPanel()
     local specialHeader = Label(panel, "Unit frame clicks", "GameFontNormal")
     specialHeader:SetPoint("TOPLEFT", LEFT_X, -196)
 
-    local specialHint = Label(panel, "Unbound keeps the frame's own behaviour, including Blizzard click bindings. Bound here, SlotCast wins.", "GameFontDisableSmall")
+    local specialHint = Label(panel, "Target and Unit menu live in WoW's own Click Bindings - click either row to open it. The rest are SlotCast's; unbound ones keep the frame's normal behaviour.", "GameFontDisableSmall")
     specialHint:SetPoint("TOPLEFT", LEFT_X, -214)
     specialHint:SetWidth(COL_W)
     specialHint:SetJustifyV("TOP")
 
     for i, special in ipairs(ns.SPECIALS) do
         local row = CreateRow(panel, false)
-        row:SetPoint("TOPLEFT", LEFT_X, -248 - (i - 1) * ROW_H)
+        row:SetPoint("TOPLEFT", LEFT_X, -258 - (i - 1) * ROW_H)
         row.target = special.key
         row.labelText = special.label
         row.label:SetText(special.label)

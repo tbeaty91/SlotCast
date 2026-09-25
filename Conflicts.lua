@@ -301,61 +301,46 @@ function Conflicts.OpenBlizzardUI()
 end
 
 function Conflicts.ExplainManualBinding(combo, action)
-    local what = (action == "menu") and "Open Context Menu" or "Target"
+    local opened, how = Conflicts.OpenBlizzardUI()
 
-    local opened = Conflicts.OpenBlizzardUI()
+    local body
+    if opened then
+        body = table.concat({
+            "This is WoW's own Click Bindings window, not SlotCast's.",
+            "",
+            "Bind |cffffffffONLY|r these two here:",
+            "     |cffffcc00Target Unit Frame|r",
+            "     |cffffcc00Open Context Menu|r",
+            "",
+            "Then press |cffffffffSave|r.",
+            "",
+            "SlotCast reads them back and shows them in its own list.",
+            "Every other click stays in SlotCast - don't bind spells here,",
+            "or the two systems will fight over the same click.",
+        }, "\n")
+    else
+        body = table.concat({
+            "Couldn't open it from here. Type |cffffcc00/clickcasting|r to open it yourself.",
+            "",
+            "Bind |cffffffffONLY|r these two there:",
+            "     |cffffcc00Target Unit Frame|r",
+            "     |cffffcc00Open Context Menu|r",
+            "",
+            "Then press |cffffffffSave|r.",
+            "",
+            "SlotCast reads them back and shows them in its own list.",
+        }, "\n")
+    end
+
+    if ns.ShowNotice then
+        ns.ShowNotice("Bind these in WoW's Click Bindings", body, "hideClickcastingNotice")
+    else
+        ns.Print("Bind Target Unit Frame and Open Context Menu in /clickcasting, then Save.")
+    end
+
     if not opened then
-        ns.Warn("Could not open it from here - type |cffffff00/clickcasting|r yourself.")
+        ns.Warn("Could not open Click Bindings - type |cffffff00/clickcasting|r.")
     end
 
-    ns.Print("|cffffffffTo bind %s:|r", what)
-    ns.Print("  1. In the |cffffff00/clickcasting|r window, drag |cffffff00%s|r onto a binding row.", what)
-    ns.Print("  2. Click that row's key field and press the click you want,")
-    ns.Print("     holding any modifiers at the same time.")
-    ns.Print("  3. SlotCast reads it back and shows it in its own list.")
-    ns.Print("Leave that click unbound in SlotCast - it only overrides Blizzard")
-    ns.Print("on clicks it binds itself.")
-end
-
-------------------------------------------------------------------------------
--- raw dump
-------------------------------------------------------------------------------
-
-local function DumpValue(value, indent)
-    if type(value) ~= "table" then
-        return ("%s%s"):format(indent, tostring(value))
-    end
-    local lines = {}
-    for k, v in pairs(value) do
-        if type(v) == "table" then
-            lines[#lines + 1] = ("%s%s = {"):format(indent, tostring(k))
-            lines[#lines + 1] = DumpValue(v, indent .. "  ")
-            lines[#lines + 1] = indent .. "}"
-        else
-            lines[#lines + 1] = ("%s%s = %s (%s)"):format(indent, tostring(k), tostring(v), type(v))
-        end
-    end
-    return table.concat(lines, "\n")
-end
-
-function Conflicts.Dump()
-    if not Conflicts.Available() then
-        ns.Print("C_ClickBindings is not present on this client.")
-        return
-    end
-    local ok, info = pcall(API().GetProfileInfo)
-    if not ok then
-        ns.Print("GetProfileInfo() errored: %s", tostring(info))
-        return
-    end
-    ns.Print("raw C_ClickBindings.GetProfileInfo():")
-    print(DumpValue(info, "  "))
-
-    for _, enumName in ipairs({ "ClickBindingType", "ClickBindingInteraction" }) do
-        local enumTable = _G.Enum and _G.Enum[enumName]
-        if enumTable then
-            ns.Print("Enum.%s:", enumName)
-            print(DumpValue(enumTable, "  "))
-        end
-    end
+    return opened, how
 end
