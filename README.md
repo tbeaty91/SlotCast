@@ -313,6 +313,7 @@ the full list.
 | `/slotcast clicks auto\|up\|down\|both` | which mouse stroke bindings fire on |
 | `/slotcast check` | read bindings back off a live frame; proves whether they landed |
 | `/slotcast check chat` | same, printed to chat instead of the copy window |
+| `/slotcast check PlayerFrame` | check one frame by name rather than whichever is sampled |
 | `/slotcast conflicts` | list Blizzard's click bindings and any overlap |
 | `/slotcast dump` | raw `C_ClickBindings.GetProfileInfo()` output |
 | `/slotcast toggle` | enable/disable without unloading |

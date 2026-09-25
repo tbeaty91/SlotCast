@@ -677,11 +677,24 @@ function ns.ModifierConflicts()
     return out
 end
 
-function Probe.Check(forceChat)
+-- `frameName` inspects one frame by name. PlayerFrame and the compact party
+-- frames are built from different templates, so "it works here but not there"
+-- is a real possibility worth being able to aim at.
+function Probe.Check(forceChat, frameName)
     lines = {}
     addf("=== SlotCast check (addon %s) ===", ns.SlotCast.version)
 
-    local frame = ns.Secure and ns.Secure.SampleFrame and ns.Secure.SampleFrame()
+    local frame
+    if frameName and frameName ~= "" then
+        frame = _G[frameName]
+        if type(frame) ~= "table" or type(frame.GetAttribute) ~= "function" then
+            ns.Warn("no frame called '%s' on this client.", frameName)
+            return
+        end
+    else
+        frame = ns.Secure and ns.Secure.SampleFrame and ns.Secure.SampleFrame()
+    end
+
     if not frame then
         ns.Warn("no unit frames are being managed - nothing to check.")
         ns.Warn("Run |cffffff00/slotcast status|r; if it says 0 frames, discovery is the problem.")

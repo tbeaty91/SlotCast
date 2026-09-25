@@ -46,7 +46,12 @@ SLASH_SLOTCAST1 = "/slotcast"
 SLASH_SLOTCAST2 = "/sc"
 
 SlashCmdList.SLOTCAST = function(msg)
-    local cmd, rest = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
+    local cmd, restRaw = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
+    cmd = cmd:lower()
+
+    -- Keyword arguments are compared lowercased, but frame names are
+    -- case-sensitive globals, so the raw text has to survive too.
+    local rest = restRaw:lower()
 
     if not Dispatch then
         ns.Warn("Core.lua did not finish loading - an error stopped it partway.")
@@ -56,7 +61,7 @@ SlashCmdList.SLOTCAST = function(msg)
 
     -- Errors surface here rather than being left to the client, which swallows
     -- them unless scriptErrors is on.
-    local ok, err = pcall(Dispatch, cmd, rest)
+    local ok, err = pcall(Dispatch, cmd, rest, restRaw)
     if not ok then
         ns.Warn("/slotcast %s failed: %s", cmd ~= "" and cmd or "(no args)", tostring(err))
         ns.Warn("Run |cffffff00/slotcast status|r to see which modules loaded.")
@@ -324,7 +329,7 @@ local function Need(name)
     return nil
 end
 
-function Dispatch(cmd, rest)
+function Dispatch(cmd, rest, restRaw)
     if cmd == "" or cmd == "config" or cmd == "options" then
         if Need("Options") then ns.Options.Open() end
 
@@ -357,7 +362,10 @@ function Dispatch(cmd, rest)
         if ns.Slots then ns.Slots.PrintPlan() end
 
     elseif cmd == "check" then
-        if Need("Probe") then ns.Probe.Check(rest == "chat") end
+        if Need("Probe") then
+            -- "check chat" prints inline; "check <FrameName>" aims at one frame.
+            ns.Probe.Check(rest == "chat", rest ~= "chat" and restRaw or nil)
+        end
 
     elseif cmd == "probe" then
         if Need("Probe") then ns.Probe.Show(rest == "chat") end
