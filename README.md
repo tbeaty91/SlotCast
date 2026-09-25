@@ -111,6 +111,36 @@ the pairs — matching every keybinding UI in the game.
 It replaces slot bindings only; target, menu and the other unit-frame actions are
 a separate decision and are left alone.
 
+## Press or release
+
+`RegisterForClicks` is per *frame*, not per binding, so the whole frame commits
+to one stroke. Casting on press is worth real milliseconds in competitive play —
+it's why the client has a cvar for it — so SlotCast defaults to press wherever it
+can.
+
+The built-in `target`, `focus`, `assist` and `menu` action types don't run on the
+press stroke. But three of those four have macro equivalents that do (a macro is
+just script execution and runs whenever the click handler runs), so SlotCast
+emits them as `/target [@mouseover]` and friends when firing on press. Only the
+**unit menu** has no press-stroke form.
+
+So the default, `auto`, fires on press — unless you've bound the unit menu, in
+which case that frame moves to release. Nothing else forces the switch.
+
+```
+/slotcast clicks auto | up | down | both
+```
+
+| | |
+|---|---|
+| `auto` | press, unless the unit menu is bound. Default. |
+| `down` | always press. Fastest; the unit menu won't work. |
+| `up` | always release. Everything works, casts land a touch later. |
+| `both` | registers both strokes. Untested — spells may fire twice. There to be measured, not recommended. |
+
+`/slotcast status` shows the mode and which stroke is actually in effect. A
+binding stranded by the current mode is called out in the options panel.
+
 ## Spell ranks
 
 On a client with Classic-style spell ranks, every action slot holds one specific
@@ -277,6 +307,8 @@ the full list.
 | `/slotcast status` | version, source bar, managed frame count, bindings and their cast strings |
 | `/slotcast rank slot\|highest` | default rank handling for all slots |
 | `/slotcast castmode spell\|macro` | how casts are emitted; switch if ranked casts don't fire |
+| `/slotcast clicks auto\|up\|down\|both` | which mouse stroke bindings fire on |
+| `/slotcast check` | read bindings back off a live frame; proves whether they landed |
 | `/slotcast conflicts` | list Blizzard's click bindings and any overlap |
 | `/slotcast dump` | raw `C_ClickBindings.GetProfileInfo()` output |
 | `/slotcast toggle` | enable/disable without unloading |

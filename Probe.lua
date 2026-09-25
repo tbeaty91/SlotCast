@@ -733,9 +733,10 @@ function Probe.Check()
         ns.Print("modified clicks: %s", table.concat(parts, "  "))
     end
 
-    ns.Print("bindings fire on mouse %s.%s",
-        ns.db.clickOnDown and "|cffff6060DOWN|r" or "up",
-        ns.db.clickOnDown and "  <-- Target/Menu do not work on down" or "")
+    ns.Print("click stroke: %s -> firing on |cffffffff%s|r", ns.db.clickStroke, ns.ClickStroke())
+    for _, entry in ipairs(ns.StrandedBindings()) do
+        ns.Warn("  %s is the unit menu and cannot fire on press.", ns.ComboText(entry.combo))
+    end
 
     for _, attr in ipairs({ "checkselfcast", "checkfocuscast" }) do
         local ok, value = pcall(frame.GetAttribute, frame, attr)

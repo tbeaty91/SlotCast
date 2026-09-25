@@ -31,7 +31,9 @@ local NIL = false
 ------------------------------------------------------------------------------
 
 local function ClickRegistration()
-    return (ns.db and ns.db.clickOnDown) and "AnyDown" or "AnyUp"
+    local stroke = ns.ClickStroke()
+    if stroke == "both" then return "AnyDown", "AnyUp" end
+    return stroke == "down" and "AnyDown" or "AnyUp"
 end
 
 ------------------------------------------------------------------------------
@@ -92,9 +94,9 @@ end
 
 function Secure.UpdateClickRegistration()
     if InCombatLockdown() then return end
-    local mode = ClickRegistration()
     for frame in pairs(managed) do
-        pcall(frame.RegisterForClicks, frame, mode)
+        -- Called last so both return values expand in "both" mode.
+        pcall(frame.RegisterForClicks, frame, ClickRegistration())
     end
 end
 

@@ -693,6 +693,11 @@ function Options.RefreshDisplay()
             :format(#conflicts, table.concat(names, ", "))
     end
 
+    for _, entry in ipairs(ns.StrandedBindings and ns.StrandedBindings() or {}) do
+        messages[#messages + 1] = ("|cffff6060%s is the unit menu, which cannot fire on press. Use |r|cffffff00/slotcast clicks up|r|cffff6060 if you need it.|r")
+            :format(ns.ComboText(entry.combo))
+    end
+
     if ns.IsRefreshPending() then
         messages[#messages + 1] = "|cffff8080Changes are waiting for you to leave combat.|r"
     end

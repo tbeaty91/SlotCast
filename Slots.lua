@@ -299,11 +299,77 @@ function ns.WipeFrameVerbs()
     detectedVerbs = nil
 end
 
+------------------------------------------------------------------------------
+-- which stroke bindings fire on
+--
+-- RegisterForClicks is per FRAME, not per binding, so the whole frame commits
+-- to press or release. That matters: casting on press is worth real milliseconds
+-- in competitive play, which is why the client has a cvar for it at all.
+--
+-- The catch is that the built-in action types "target", "focus", "assist" and
+-- "menu" do not run on the press stroke. But three of those four have macro
+-- equivalents that do -- a macro is just script execution and runs whenever the
+-- click handler runs. So only the unit menu genuinely forces release, and only
+-- when it is actually bound.
+------------------------------------------------------------------------------
+
+-- Bindings that have no press-stroke equivalent.
+local NEEDS_RELEASE = { menu = true }
+
+function ns.ClickStroke()
+    local mode = (ns.db and ns.db.clickStroke) or "auto"
+    if mode ~= "auto" then return mode end
+
+    for _, value in pairs(ns.db.binds) do
+        if type(value) == "string" and NEEDS_RELEASE[value] then return "up" end
+    end
+    return "down"
+end
+
+function ns.FiresOnDown()
+    local stroke = ns.ClickStroke()
+    return stroke == "down" or stroke == "both"
+end
+
+-- Bindings that need the release stroke but are configured not to get it.
+function ns.StrandedBindings()
+    if not ns.FiresOnDown() then return {} end
+    local out = {}
+    for combo, value in pairs(ns.db.binds) do
+        if type(value) == "string" and NEEDS_RELEASE[value] then
+            out[#out + 1] = { combo = combo, action = value }
+        end
+    end
+    return out
+end
+
 local SPECIAL_SPEC = {
-    target = function() return { type = ns.FrameVerb("target") } end,
-    menu   = function() return { type = ns.FrameVerb("menu") } end,
-    focus  = function() return { type = "focus" } end,
-    assist = function() return { type = "assist" } end,
+    -- On the press stroke these become macros, which run on either stroke.
+    -- Same effect, no loss of cast responsiveness elsewhere on the frame.
+    target = function()
+        if ns.FiresOnDown() then
+            return { type = "macro", key = "macrotext", value = "/target [@mouseover,exists]" }
+        end
+        return { type = ns.FrameVerb("target") }
+    end,
+
+    focus = function()
+        if ns.FiresOnDown() then
+            return { type = "macro", key = "macrotext", value = "/focus [@mouseover,exists]" }
+        end
+        return { type = "focus" }
+    end,
+
+    assist = function()
+        if ns.FiresOnDown() then
+            return { type = "macro", key = "macrotext", value = "/assist [@mouseover,exists]" }
+        end
+        return { type = "assist" }
+    end,
+
+    -- No macro command opens a unit menu, so this one has no press-stroke form.
+    menu = function() return { type = ns.FrameVerb("menu") } end,
+
     -- There is no "follow" action type, and RunMacroText gets no unit, so this
     -- one leans on mouseover -- which is always correct for a click-cast, since
     -- the cursor is over the frame by definition.

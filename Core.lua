@@ -95,11 +95,14 @@ ns.defaults = {
     rankMode      = "slot",
     rankOverrides = {},
 
-    -- Fire click bindings on press rather than release. Off by default: unit
-    -- frames are up-stroke frames, and "target"/"menu" do not work on down.
-    -- Only worth turning on if you want casts a few milliseconds earlier and
-    -- bind nothing but spells.
-    clickOnDown = false,
+    -- Which mouse stroke bindings fire on.
+    --   "auto" (default) press, unless the unit menu is bound -- the one action
+    --          with no press-stroke equivalent. Casting stays responsive.
+    --   "down" always press. Fastest; the unit menu will not work.
+    --   "up"   always release. Everything works, casts land a touch later.
+    --   "both" register both strokes. Untested on any client; spells may fire
+    --          twice. Here to be measured, not recommended.
+    clickStroke = "auto",
 
     -- How "Map grid to clicks" reads a bar's shape. Neither is more correct;
     -- a 3-wide bar wants columns as buttons, a 3-tall one wants rows.
@@ -340,6 +343,8 @@ function Dispatch(cmd, rest)
                 table.concat(missing, ", "))
         end
 
+        ns.Print("click stroke: %s -> firing on |cffffffff%s|r", ns.db.clickStroke, ns.ClickStroke())
+
         if type(ns.FrameVerb) == "function" then
             ns.Print("frame verbs: target=%s menu=%s",
                 tostring(ns.FrameVerb("target")), tostring(ns.FrameVerb("menu")))
@@ -378,17 +383,23 @@ function Dispatch(cmd, rest)
         end
 
     elseif cmd == "clicks" then
-        if rest == "up" or rest == "down" then
-            ns.db.clickOnDown = (rest == "down")
-            ns.Print("bindings now fire on mouse %s.", rest)
-            if ns.db.clickOnDown then
-                ns.Warn("note: Target unit and Unit menu do not work on the down-stroke.")
-            end
+        if rest == "auto" or rest == "up" or rest == "down" or rest == "both" then
+            ns.db.clickStroke = rest
             ns.Secure.UpdateClickRegistration()
             ns.Refresh(true)
+            ns.Print("click stroke: %s (currently firing on %s)", rest, ns.ClickStroke())
+
+            local stranded = ns.StrandedBindings()
+            for _, entry in ipairs(stranded) do
+                ns.Warn("%s is the unit menu, which cannot fire on press - it will not work.",
+                    ns.ComboText(entry.combo))
+            end
+            if rest == "both" then
+                ns.Warn("'both' is experimental: if spells now cast twice per click, it is not supported here.")
+            end
         else
-            ns.Print("usage: |cffffff00/slotcast clicks up|r or |cffffff00/slotcast clicks down|r (current: %s)",
-                ns.db.clickOnDown and "down" or "up")
+            ns.Print("usage: |cffffff00/slotcast clicks auto|up|down|both|r (current: %s -> firing on %s)",
+                ns.db.clickStroke, ns.ClickStroke())
         end
 
     elseif cmd == "castmode" then
