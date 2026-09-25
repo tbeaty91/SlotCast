@@ -20,7 +20,7 @@ local panel, category, standalone, settingsHost
 local barButtons, specialRows, slotRows = {}, {}, {}
 local warningText, conflictText, slotHeader, rankDefaultLabel
 local gridCache, gridIs2D
-local gridAxisButton, gridOrderButton
+local gridAxisLabel, gridOrderButton
 local blizzDelegateButton
 local rankDefaultButtons = {}
 
@@ -224,6 +224,18 @@ local ROW_MODS = {
     { true,  true,  true  },  -- Alt + Ctrl + Shift
 }
 
+-- Every combo in a sensible order, for shapes that have no grid to read:
+-- Left, Middle, Right, then the same again with Shift, Ctrl, Alt.
+local function EnumerateCombos(buttons)
+    local out = {}
+    for _, mods in ipairs(ROW_MODS) do
+        for _, button in ipairs(buttons) do
+            out[#out + 1] = ns.MakeCombo(button, mods[1], mods[2], mods[3])
+        end
+    end
+    return out
+end
+
 local function AutoMapGrid()
     local grid, rows, cols = ns.Slots.GridLayout()
     if not grid then
@@ -232,6 +244,7 @@ local function AutoMapGrid()
     end
 
     local buttons = BUTTON_ORDERS[ns.db.gridButtonOrder] or BUTTON_ORDERS.LMR
+    local axis, forced = ns.ResolvedGridAxis(rows, cols)
 
     -- Replace slot bindings only. Target/menu and friends are a separate
     -- decision and are left exactly as they are.
@@ -239,39 +252,64 @@ local function AutoMapGrid()
         if type(value) == "number" then ns.db.binds[combo] = nil end
     end
 
-    local mapped, skipped, protected = 0, 0, {}
-    for index = 1, ns.SLOTS_PER_BAR do
+    -- A shape with no usable axis (one line of twelve, say) still maps fine:
+    -- walk the slots in reading order and hand out combos in order.
+    local enumerated, order
+    if axis == "enumerate" then
+        enumerated = EnumerateCombos(buttons)
+        order = {}
+        for index = 1, ns.SLOTS_PER_BAR do
+            if grid[index] then order[#order + 1] = index end
+        end
+        table.sort(order, function(a, b)
+            local ca, cb = grid[a], grid[b]
+            if ca.row ~= cb.row then return ca.row < cb.row end
+            return ca.col < cb.col
+        end)
+    end
+
+    local function ComboFornIndex(index, position)
+        if axis == "enumerate" then return enumerated[position] end
         local cell = grid[index]
-        if cell then
-            -- Which axis carries the mouse button is a layout preference, not
-            -- a fact about the bar: a 3-wide grid wants columns, a 3-tall one
-            -- wants rows.
-            local btnAxis = ns.db.gridTranspose and cell.row or cell.col
-            local modAxis = ns.db.gridTranspose and cell.col or cell.row
+        local btnAxis = (axis == "row") and cell.row or cell.col
+        local modAxis = (axis == "row") and cell.col or cell.row
+        if not buttons[btnAxis] or not ROW_MODS[modAxis] then return nil end
+        local mods = ROW_MODS[modAxis]
+        return ns.MakeCombo(buttons[btnAxis], mods[1], mods[2], mods[3])
+    end
 
-            if buttons[btnAxis] and ROW_MODS[modAxis] then
-                local mods = ROW_MODS[modAxis]
-                local combo = ns.MakeCombo(buttons[btnAxis], mods[1], mods[2], mods[3])
-                local existing = ns.db.binds[combo]
+    local mapped, skipped, protected = 0, 0, {}
+    local sequence = order or (function()
+        local list = {}
+        for index = 1, ns.SLOTS_PER_BAR do
+            if grid[index] then list[#list + 1] = index end
+        end
+        return list
+    end)()
 
-                -- Slot bindings were cleared above, so anything still here is a
-                -- unit-frame action the user chose deliberately. A bulk mapping
-                -- does not get to overwrite that.
-                if existing ~= nil then
-                    protected[#protected + 1] = ("%s (%s)"):format(ns.ComboText(combo), DescribeTarget(existing))
-                else
-                    ns.db.binds[combo] = index
-                    mapped = mapped + 1
-                end
+    for position, index in ipairs(sequence) do
+        local combo = ComboFornIndex(index, position)
+        if not combo then
+            skipped = skipped + 1
+        else
+            local existing = ns.db.binds[combo]
+            -- Slot bindings were cleared above, so anything still here is a
+            -- unit-frame action the user chose deliberately. A bulk mapping
+            -- does not get to overwrite that.
+            if existing ~= nil then
+                protected[#protected + 1] = ("%s (%s)"):format(ns.ComboText(combo), DescribeTarget(existing))
             else
-                skipped = skipped + 1
+                ns.db.binds[combo] = index
+                mapped = mapped + 1
             end
         end
     end
 
-    ns.Print("mapped a %dx%d grid: %d slot(s) bound%s.",
-        cols, rows, mapped,
-        skipped > 0 and (", %d outside the 5-column / 8-row range"):format(skipped) or "")
+    local how = (axis == "enumerate") and "in order"
+             or ((axis == "col") and "columns are mouse buttons" or "rows are mouse buttons")
+    ns.Print("mapped a %dx%d grid, %s%s: %d slot(s) bound%s.",
+        cols, rows, how, forced and " (forced)" or "", mapped,
+        skipped > 0 and (", %d skipped"):format(skipped) or "")
 
     if #protected > 0 then
         ns.Warn("left alone, already bound to a unit-frame action: %s", table.concat(protected, ", "))
@@ -625,8 +663,8 @@ local function BuildPanel()
     autoMap:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Map the bar's shape onto clicks")
-        GameTooltip:AddLine("Columns become Left, Middle, Right (then buttons 4 and 5).", 0.8, 0.8, 0.8, true)
-        GameTooltip:AddLine("Rows become no modifier, Shift, Ctrl, Alt.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("The shorter side of the bar becomes Left, Middle, Right; the longer side becomes no modifier, Shift, Ctrl, Alt.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("Worked out from the bar's shape - a 3-wide and a 3-tall bar both read correctly.", 0.8, 0.8, 0.8, true)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Read from where the buttons actually sit on screen, so it works whatever order this client folds bars in.", 0.5, 0.8, 1, true)
         GameTooltip:AddLine("Replaces existing slot bindings. Target/menu are left alone.", 1, 0.6, 0.2, true)
@@ -634,22 +672,13 @@ local function BuildPanel()
     end)
     autoMap:SetScript("OnLeave", GameTooltip_Hide)
 
-    -- Which axis carries the mouse button, and where middle-click sits, are
-    -- preferences rather than facts. Two toggles beat a scheme baked in.
-    gridAxisButton = PushButton(panel, 148, 22, "")
-    gridAxisButton:SetPoint("TOPLEFT", RIGHT_X, -450)
-    gridAxisButton:SetScript("OnClick", function()
-        ns.db.gridTranspose = not ns.db.gridTranspose
-        Options.RefreshDisplay()
-    end)
-    gridAxisButton:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Which axis is the mouse button")
-        GameTooltip:AddLine("A 3-wide bar usually wants columns; a 3-tall one wants rows.", 0.8, 0.8, 0.8, true)
-        GameTooltip:AddLine("Press Map again after changing this.", 1, 0.6, 0.2, true)
-        GameTooltip:Show()
-    end)
-    gridAxisButton:SetScript("OnLeave", GameTooltip_Hide)
+    -- Orientation is detected, not asked about: the shorter axis carries the
+    -- mouse buttons because buttons are scarcer than modifiers. This just says
+    -- what it worked out, so the mapping is never a surprise.
+    gridAxisLabel = Label(panel, "", "GameFontDisableSmall")
+    gridAxisLabel:SetPoint("TOPLEFT", RIGHT_X, -454)
+    gridAxisLabel:SetWidth(148)
+    gridAxisLabel:SetJustifyV("TOP")
 
     gridOrderButton = PushButton(panel, 148, 22, "")
     gridOrderButton:SetPoint("TOPLEFT", RIGHT_X + 152, -450)
@@ -762,12 +791,12 @@ function Options.RefreshDisplay()
     gridCache = grid
     gridIs2D = grid and gridRows > 1 and gridCols > 1
 
-    gridAxisButton:SetText(ns.db.gridTranspose and "Rows = buttons" or "Columns = buttons")
     gridOrderButton:SetText(ns.db.gridButtonOrder == "LRM" and "L  R  M" or "L  M  R")
 
-    -- A one-dimensional bar has no axis choice to make.
-    gridAxisButton:SetEnabled(gridIs2D and true or false)
-    gridAxisButton:SetAlpha(gridIs2D and 1 or 0.35)
+    local axis, forced = ns.ResolvedGridAxis(gridRows, gridCols)
+    local axisText = (axis == "enumerate") and "slots map in order"
+                  or ((axis == "col") and "columns are buttons" or "rows are buttons")
+    gridAxisLabel:SetText(("|cff808080%s%s|r"):format(axisText, forced and " (forced)" or ""))
     if grid then
         slotHeader:SetText(("%s  |cff6699cc%dx%d|r"):format(
             ns.BAR_NAMES[ns.db.bar] or ("Bar " .. ns.db.bar), gridCols, gridRows))

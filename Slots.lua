@@ -209,6 +209,30 @@ function Slots.GridLayout(bar)
     return grid, row, col
 end
 
+-- Which axis of a grid should carry the mouse button.
+--
+-- Mouse buttons are scarce -- three comfortable, five at the absolute most --
+-- while modifier combinations are plentiful, eight of them. So the shorter axis
+-- carries buttons and the longer one carries modifiers. That reads a 3-wide bar
+-- and a 3-tall bar correctly without anyone having to say which is which.
+--
+-- Returns "col", "row", or "enumerate" for shapes with no usable axis (a single
+-- line of twelve, or a grid too big on both sides).
+function ns.GridButtonAxis(rows, cols)
+    if not rows or not cols then return "enumerate" end
+    if rows <= 1 or cols <= 1 then return "enumerate" end
+    if cols <= rows and cols <= 5 then return "col" end
+    if rows < cols and rows <= 5 then return "row" end
+    return "enumerate"
+end
+
+-- Honours an explicit override, otherwise decides from the shape.
+function ns.ResolvedGridAxis(rows, cols)
+    local setting = (ns.db and ns.db.gridAxis) or "auto"
+    if setting == "col" or setting == "row" then return setting, true end
+    return ns.GridButtonAxis(rows, cols), false
+end
+
 ------------------------------------------------------------------------------
 -- combos
 ------------------------------------------------------------------------------

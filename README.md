@@ -98,15 +98,20 @@ differs between clients, so SlotCast reads where the buttons actually sit on
 screen and clusters them into rows and columns. It works on any shape — 3x4,
 4x3, 2x6, a plain row of twelve. Reshape the bar and press it again.
 
-Two toggles sit under the button, because neither choice is universal:
+**Orientation is worked out, not asked about.** Mouse buttons are scarce (three
+comfortable, five at most) while modifier combinations are plentiful (eight), so
+the bar's *shorter* side carries the buttons and the longer side carries the
+modifiers. A 3-wide bar and a 3-tall bar both read correctly with no setting.
+The panel says which it picked. `/slotcast grid cols|rows` forces it if you ever
+disagree.
 
-| | |
-|---|---|
-| **Columns / Rows = buttons** | which axis carries the mouse button. A 3-wide bar usually wants columns, a 3-tall one rows. Disabled on a single-row bar, which has no axis to choose. |
-| **L M R / L R M** | the order buttons are handed out along that axis. Put middle last if it's awkward on your mouse. |
+A bar with no usable grid — a single line of twelve, say — maps in reading order
+instead: Left, Middle, Right, then the same again with Shift, Ctrl and Alt.
 
-Modifier rows always run in the canonical order — none, Shift, Ctrl, Alt, then
-the pairs — matching every keybinding UI in the game.
+One toggle remains, because it isn't universal: **L M R / L R M** sets the order
+buttons are handed out. Put middle last if it's awkward on your mouse. Modifier
+rows always run in the canonical order — none, Shift, Ctrl, Alt, then the pairs —
+matching every keybinding UI in the game.
 
 It replaces slot bindings only; target, menu and the other unit-frame actions are
 a separate decision and are left alone.

@@ -124,9 +124,10 @@ ns.defaults = {
     --          twice. Here to be measured, not recommended.
     clickStroke = "auto",
 
-    -- How "Map grid to clicks" reads a bar's shape. Neither is more correct;
-    -- a 3-wide bar wants columns as buttons, a 3-tall one wants rows.
-    gridTranspose   = false,      -- false: columns are mouse buttons
+    -- How "Map grid to clicks" reads a bar's shape. "auto" picks the shorter
+    -- axis for mouse buttons, which is right for both a 3-wide and a 3-tall
+    -- bar; "col"/"row" force it.
+    gridAxis        = "auto",
     gridButtonOrder = "LMR",      -- or "LRM", for people who find middle-click awkward
 
     -- "spell" uses type="spell" so the secure handler supplies the unit.
@@ -433,6 +434,17 @@ function Dispatch(cmd, rest, restRaw)
                 ns.db.menuVerb, ns.FrameVerb("menu"))
         end
 
+    elseif cmd == "grid" then
+        local map = { auto = "auto", cols = "col", columns = "col", rows = "row" }
+        if map[rest] then
+            ns.db.gridAxis = map[rest]
+            ns.Refresh(true)
+            ns.Print("grid axis: %s", ns.db.gridAxis)
+        else
+            ns.Print("usage: |cffffff00/slotcast grid auto|cols|rows|r (current: %s)", ns.db.gridAxis)
+            ns.Print("auto uses the bar's shorter side for mouse buttons.")
+        end
+
     elseif cmd == "clicks" then
         if rest == "auto" or rest == "up" or rest == "down" or rest == "both" then
             ns.db.clickStroke = rest
@@ -468,7 +480,7 @@ function Dispatch(cmd, rest, restRaw)
         ns.Refresh(true)
 
     else
-        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00clicks|r, |cffffff00menuverb|r, |cffffff00blizz|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
+        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00clicks|r, |cffffff00menuverb|r, |cffffff00blizz|r, |cffffff00grid|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
     end
 end
 
