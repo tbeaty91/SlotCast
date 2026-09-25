@@ -256,19 +256,53 @@ function Conflicts.BindingTextFor(action)
     return nil
 end
 
--- Run a slash command by its text, whatever handler the client filed it under.
--- Looking the command up beats hardcoding a frame name: the UI behind
--- /clickcasting has been rebuilt more than once, but the command has not.
-local function RunSlashCommand(command)
+-- Run a slash command by its text.
+--
+-- Three routes, because a command can live in any of them. Some are SLASH_*
+-- globals in SlashCmdList, some are in SecureCmdList, and some -- /clickcasting
+-- on at least one client -- are not exposed as globals at all and only the chat
+-- parser knows about them. Typing it works, so the parser is the route that
+-- always works.
+local function FindSlashHandler(command)
     command = command:lower()
     for key, value in pairs(_G) do
         if type(key) == "string" and type(value) == "string" and value:lower() == command then
-            local handler = key:match("^SLASH_(.+)%d+$")
-            if handler and type(SlashCmdList) == "table" and type(SlashCmdList[handler]) == "function" then
-                if pcall(SlashCmdList[handler], "") then return true, command end
+            local name = key:match("^SLASH_(.+)%d+$")
+            if name then
+                if type(_G.SlashCmdList) == "table" and type(_G.SlashCmdList[name]) == "function" then
+                    return _G.SlashCmdList[name], "SlashCmdList." .. name
+                end
+                if type(_G.SecureCmdList) == "table" and type(_G.SecureCmdList[name]) == "function" then
+                    return _G.SecureCmdList[name], "SecureCmdList." .. name
+                end
             end
         end
     end
+    return nil
+end
+
+ns.FindSlashHandler = FindSlashHandler
+
+local function RunSlashCommand(command)
+    local handler, how = FindSlashHandler(command)
+    if handler then
+        local ok = pcall(handler, "")
+        if ok then return true, how end
+    end
+
+    -- Hand it to the chat parser exactly as if it had been typed.
+    local edit = _G.ChatFrame1EditBox
+        or (_G.DEFAULT_CHAT_FRAME and _G.DEFAULT_CHAT_FRAME.editBox)
+    if edit and type(_G.ChatEdit_SendText) == "function" then
+        local ok = pcall(function()
+            local saved = edit:GetText()
+            edit:SetText(command)
+            _G.ChatEdit_SendText(edit, 0)
+            edit:SetText(saved or "")
+        end)
+        if ok then return true, "chat parser" end
+    end
+
     return false
 end
 

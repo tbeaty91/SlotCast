@@ -808,6 +808,14 @@ function Probe.Check(forceChat, frameName)
     end
     addf("  menu bindable from an attribute: %s", tostring(ns.MenuSupported()))
 
+    -- How reachable is the Click Bindings UI? A command can be a SLASH_ global,
+    -- a SecureCmdList entry, or known only to the chat parser.
+    local _, how = ns.FindSlashHandler("/clickcasting")
+    addf("  /clickcasting handler: %s", how or "not a SLASH_ global")
+    ReportAPI("ChatEdit_SendText")
+    ReportAPI("ChatFrame1EditBox")
+    ReportAPI("SecureCmdList")
+
     -- 3c. Blizzard's own click bindings, which run on their own path and could
     --     be claiming these combos before ours are consulted.
     section("BLIZZARD CLICK BINDINGS")
