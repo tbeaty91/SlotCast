@@ -100,12 +100,11 @@ ns.defaults = {
     rankMode      = "slot",
     rankOverrides = {},
 
-    -- Hand Target / Unit menu to Blizzard's own click bindings instead of
-    -- binding them ourselves. "menu" covers the one that cannot work as an
-    -- attribute on current clients; "both" also gives them targeting.
-    blizzDelegate = "off",
-    modifierBits  = {},   -- combo -> the client's own modifier bitfield
-    blizzWritten  = {},   -- what we last wrote into their profile
+    -- On clients that have Blizzard's click-binding system, Target and Unit
+    -- menu belong to it: SlotCast shows what is bound there instead of
+    -- offering a second place to bind them. "off" takes them back, for a
+    -- client where that system does not exist or does not work.
+    blizzDelegate = "auto",
 
     -- Which secure action type opens the unit menu. "auto" picks "menu" only
     -- when the frame has a menu function for SecureUnitButton_OnClick to call,
@@ -182,11 +181,6 @@ local function DoRefresh()
     ns.Slots.BuildPlan()
     ns.Secure.ApplyAll()
 
-    -- Idempotent: only touches Blizzard's profile when what we want differs
-    -- from what we last wrote.
-    if ns.db.blizzDelegate ~= "off" and ns.Conflicts then
-        pcall(ns.Conflicts.SyncDelegated)
-    end
     if ns.Options and ns.Options.RefreshDisplay then ns.Options.RefreshDisplay() end
 end
 
@@ -409,24 +403,16 @@ function Dispatch(cmd, rest, restRaw)
         end
 
     elseif cmd == "blizz" then
-        if rest == "off" or rest == "menu" or rest == "both" then
+        if rest == "auto" or rest == "off" then
             ns.db.blizzDelegate = rest
             ns.Refresh(true)
-            local ok, message, missing = ns.Conflicts.SyncDelegated()
-            if message then ns.Print("%s", message) end
-            if not ok then ns.Warn("could not update Blizzard's bindings: %s", tostring(message)) end
-            for _, combo in ipairs(missing or {}) do
-                ns.Warn("%s needs re-binding once so its modifier can be captured.", ns.ComboText(combo))
-            end
-        elseif rest == "manual" or rest == "help" then
-            local combo, action
-            for c, value in pairs(ns.db.binds) do
-                if value == "menu" then combo, action = c, "menu" break end
-            end
-            ns.Conflicts.ExplainManualBinding(combo, action or "menu")
+            ns.Print("Target and Unit menu are %s.",
+                rest == "off" and "bound by SlotCast" or "read from Blizzard's click bindings")
+        elseif rest == "manual" or rest == "help" or rest == "" then
+            ns.Conflicts.ExplainManualBinding(nil, "menu")
         else
-            ns.Print("usage: |cffffff00/slotcast blizz off|menu|both|r (current: %s)", ns.db.blizzDelegate)
-            ns.Print("or |cffffff00/slotcast blizz manual|r for how to bind it by hand.")
+            ns.Print("usage: |cffffff00/slotcast blizz auto|off|r (current: %s), or |cffffff00blizz manual|r for the steps.",
+                ns.db.blizzDelegate)
         end
 
     elseif cmd == "menuverb" then

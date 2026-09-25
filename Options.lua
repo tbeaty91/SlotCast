@@ -12,7 +12,7 @@ local Options = ns.Options
 local ROW_H    = 24
 local COL_W    = 300
 local CONTENT_W = 652
-local CONTENT_H = 572
+local CONTENT_H = 544
 local LEFT_X   = 16
 local RIGHT_X  = 336
 
@@ -230,16 +230,25 @@ local function CreateRow(parent, hasIcon)
     row.capture:SetPoint("LEFT", 148, 0)
     row.capture:RegisterForClicks("AnyUp")
     row.capture:SetScript("OnClick", function(self, mouseButton)
+        if row.blizzardOwned then
+            ns.Conflicts.ExplainManualBinding(nil, row.target)
+            return
+        end
         local button = ns.ButtonNumber(mouseButton)
         if not button then return end
         local combo = ns.MakeCombo(button, IsAltKeyDown(), IsControlKeyDown(), IsShiftKeyDown())
-        -- The keys are still held right now, which is the only moment the
-        -- client will tell us its own modifier bitfield.
-        ns.RecordModifierBits(combo)
         Assign(row.target, combo)
     end)
     row.capture:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if row.blizzardOwned then
+            GameTooltip:SetText("Set in Blizzard's Click Bindings")
+            GameTooltip:AddLine("This action moved to the game's own click-binding system, so SlotCast shows what you have set there rather than competing with it.", 0.8, 0.8, 0.8, true)
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Click to open it and see the steps.", 0.5, 0.8, 1, true)
+            GameTooltip:Show()
+            return
+        end
         GameTooltip:AddLine("Click here with the mouse button you want to bind.")
         GameTooltip:AddLine("Hold Shift, Ctrl and/or Alt while clicking to include them.", 0.8, 0.8, 0.8, true)
         if row.note then
@@ -288,6 +297,22 @@ local function CreateRow(parent, hasIcon)
 end
 
 local function UpdateRow(row)
+    -- Actions Blizzard's click-binding system owns are shown, not offered:
+    -- binding them here would silently do nothing and block theirs as well.
+    if ns.BlizzardOwns(row.target) then
+        local text = ns.Conflicts.BindingTextFor(row.target)
+        row.blizzardOwned = true
+        row.capture:SetText(text and ("|cff80c0ff" .. text .. "|r") or "|cff808080not set|r")
+        row.capture:SetEnabled(true)
+        row.clear:SetEnabled(false)
+        row.clear:SetAlpha(0.25)
+        row.label:SetText(row.labelText .. " |cff808080(Blizzard)|r")
+        return
+    end
+
+    row.blizzardOwned = false
+    row.clear:SetAlpha(1)
+
     local combo = ComboFor(row.target)
     row.capture:SetText(combo and ns.ComboText(combo) or "|cff808080unbound|r")
     row.clear:SetEnabled(combo ~= nil)
@@ -413,6 +438,7 @@ local function BuildPanel()
         local row = CreateRow(panel, false)
         row:SetPoint("TOPLEFT", LEFT_X, -248 - (i - 1) * ROW_H)
         row.target = special.key
+        row.labelText = special.label
         row.label:SetText(special.label)
         specialRows[i] = row
     end
@@ -444,57 +470,21 @@ local function BuildPanel()
         Options.RefreshDisplay()
     end)
 
-    blizzDelegateButton = PushButton(panel, COL_W, 22, "")
+    blizzDelegateButton = PushButton(panel, COL_W, 22, "Open Blizzard's Click Bindings")
     blizzDelegateButton:SetPoint("TOPLEFT", LEFT_X, -472)
     blizzDelegateButton:SetScript("OnClick", function()
-        local order = { off = "menu", menu = "both", both = "off" }
-        ns.db.blizzDelegate = order[ns.db.blizzDelegate] or "menu"
-        ns.Refresh(true)
-        local ok, message, missing = ns.Conflicts.SyncDelegated()
-        if message then ns.Print("%s", message) end
-        if not ok then ns.Warn("could not update Blizzard's bindings: %s", tostring(message)) end
-        for _, combo in ipairs(missing or {}) do
-            ns.Warn("%s needs re-binding once so its modifier can be captured.", ns.ComboText(combo))
-        end
-        Options.RefreshDisplay()
+        ns.Conflicts.ExplainManualBinding(nil, "menu")
     end)
     blizzDelegateButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Let Blizzard handle these clicks")
-        GameTooltip:AddLine("Unit menus (and targeting) moved to Blizzard's click bindings, which add-ons cannot drive from a secure attribute - but can write to.", 0.8, 0.8, 0.8, true)
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("SlotCast writes the binding into their profile and stops binding that click itself.", 0.5, 0.8, 1, true)
-        GameTooltip:AddLine("Your other click bindings are preserved.", 1, 0.6, 0.2, true)
+        GameTooltip:SetText("Blizzard's Click Bindings")
+        GameTooltip:AddLine("Targeting and the unit menu are set there. SlotCast reads them back and shows them above.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end)
     blizzDelegateButton:SetScript("OnLeave", GameTooltip_Hide)
 
-    local manualBind = PushButton(panel, COL_W, 22, "Show me how to bind it in Blizzard's UI")
-    manualBind:SetPoint("TOPLEFT", LEFT_X, -500)
-    manualBind:SetScript("OnClick", function()
-        -- Prefer a menu binding to explain, since that is the one that cannot
-        -- work any other way.
-        local combo, action
-        for c, value in pairs(ns.db.binds) do
-            if value == "menu" then combo, action = c, "menu" break end
-        end
-        if not combo then
-            for c, value in pairs(ns.db.binds) do
-                if value == "target" then combo, action = c, "target" break end
-            end
-        end
-        ns.Conflicts.ExplainManualBinding(combo, action or "menu")
-    end)
-    manualBind:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Bind it by hand")
-        GameTooltip:AddLine("Opens Blizzard's Click Bindings and prints the steps to chat. This route always works, unlike writing their profile for you.", 0.8, 0.8, 0.8, true)
-        GameTooltip:Show()
-    end)
-    manualBind:SetScript("OnLeave", GameTooltip_Hide)
-
     local clearMine = PushButton(panel, COL_W, 22, "Clear all SlotCast bindings")
-    clearMine:SetPoint("TOPLEFT", LEFT_X, -528)
+    clearMine:SetPoint("TOPLEFT", LEFT_X, -500)
     clearMine:SetScript("OnClick", function()
         wipe(ns.db.binds)
         ns.Refresh(true)
@@ -683,14 +673,9 @@ function Options.RefreshDisplay()
         barButtons[i].sel:SetShown(ns.db.bar == i)
     end
 
-    local delegateLabel = {
-        off  = "Blizzard handles: nothing",
-        menu = "Blizzard handles: unit menu",
-        both = "Blizzard handles: menu + target",
-    }
-    blizzDelegateButton:SetText(delegateLabel[ns.db.blizzDelegate] or delegateLabel.off)
-    blizzDelegateButton:SetEnabled(ns.Conflicts.Available())
-    blizzDelegateButton:SetAlpha(ns.Conflicts.Available() and 1 or 0.35)
+    local hasBlizzBindings = ns.Conflicts.Available()
+    blizzDelegateButton:SetEnabled(hasBlizzBindings)
+    blizzDelegateButton:SetAlpha(hasBlizzBindings and 1 or 0.35)
 
     slotHeader:SetText(ns.BAR_NAMES[ns.db.bar] or ("Bar " .. ns.db.bar))
 
@@ -754,18 +739,6 @@ function Options.RefreshDisplay()
         end
         messages[#messages + 1] = ("|cffff6060%d binding(s) use a hijacked modifier (%s). Those clicks act on you, not the frame. Rebind, or change it in Options > Combat.|r")
             :format(#conflicts, table.concat(names, ", "))
-    end
-
-    -- A menu binding that cannot work is worse than no menu binding: it looks
-    -- broken rather than unsupported, and it blocks Blizzard's own binding on
-    -- that click.
-    if ns.MenuSupported and not ns.MenuSupported() then
-        for combo, value in pairs(ns.db.binds) do
-            if value == "menu" then
-                messages[#messages + 1] = ("|cffff6060%s cannot open a unit menu as a normal binding on this client - that moved to Blizzard's Click Bindings. Use the buttons below: try handing it over, and if that fails, bind it by hand there and leave this click unbound.|r")
-                    :format(ns.ComboText(combo))
-            end
-        end
     end
 
     for _, entry in ipairs(ns.StrandedBindings and ns.StrandedBindings() or {}) do

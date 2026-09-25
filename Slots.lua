@@ -341,36 +341,19 @@ end
 -- one their binding produces.
 ------------------------------------------------------------------------------
 
-local DELEGATABLE = { menu = true, target = true }
+-- Actions that Blizzard's click-binding system owns on clients that have one.
+-- Targeting and the unit menu both live there now, so SlotCast shows what is
+-- bound rather than offering a second, competing place to bind it.
+local BLIZZARD_OWNED = { menu = true, target = true }
 
-function ns.IsDelegated(value)
-    if type(value) ~= "string" or not DELEGATABLE[value] then return false end
-
-    local mode = (ns.db and ns.db.blizzDelegate) or "off"
-    if mode == "off" then return false end
-    if not (ns.Conflicts and ns.Conflicts.Available()) then return false end
-
-    if mode == "both" then return true end
-    return mode == "menu" and value == "menu"
+function ns.BlizzardOwns(value)
+    if type(value) ~= "string" or not BLIZZARD_OWNED[value] then return false end
+    if (ns.db and ns.db.blizzDelegate) == "off" then return false end
+    return ns.Conflicts and ns.Conflicts.Available() and true or false
 end
 
--- The modifier bitfield's encoding is undocumented, so do not reconstruct it:
--- capture it from the client at the moment the user holds the keys.
-function ns.RecordModifierBits(combo)
-    local api = _G.C_ClickBindings
-    if not api or type(api.MakeModifiers) ~= "function" then return end
-    local ok, bits = pcall(api.MakeModifiers)
-    if ok and type(bits) == "number" then
-        ns.db.modifierBits = ns.db.modifierBits or {}
-        ns.db.modifierBits[combo] = bits
-    end
-end
-
-function ns.ModifierBitsFor(combo)
-    local prefix = ns.SplitCombo(combo)
-    if prefix == "" then return 0 end  -- no modifiers needs no capture
-    return ns.db.modifierBits and ns.db.modifierBits[combo]
-end
+-- Kept as the old name for the plan builder.
+ns.IsDelegated = ns.BlizzardOwns
 
 function ns.MenuSupported()
     local sample = ns.Secure and ns.Secure.SampleFrame and ns.Secure.SampleFrame()

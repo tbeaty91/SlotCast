@@ -222,107 +222,10 @@ function Conflicts.Clear()
 end
 
 ------------------------------------------------------------------------------
--- writing our bindings into Blizzard's profile
---
--- SetProfileByInfo replaces the whole profile, so read first, preserve
--- everything that isn't ours, and only then write back. Entries we wrote before
--- are tracked by button+modifiers so they can be removed when a binding changes.
+-- the actions Blizzard's system owns
 ------------------------------------------------------------------------------
 
-local BUTTON_NAME = {
-    [1] = "LeftButton", [2] = "RightButton", [3] = "MiddleButton",
-    [4] = "Button4", [5] = "Button5",
-}
-
 local INTERACTION_FOR = { target = "Target", menu = "OpenContextMenu" }
-
-local function EntryKey(entry)
-    return ("%s/%s"):format(tostring(entry.button), tostring(entry.modifiers))
-end
-
--- Returns ok, message, missing (combos whose modifier bits were never captured).
-function Conflicts.SyncDelegated()
-    local api = API()
-    if not Conflicts.Available() or type(api.SetProfileByInfo) ~= "function" then
-        return false, "this client has no writable click bindings"
-    end
-    if InCombatLockdown() then return false, "in combat" end
-
-    local E = _G.Enum and _G.Enum.ClickBindingType
-    local I = _G.Enum and _G.Enum.ClickBindingInteraction
-    if not E or not I then return false, "click binding enums are missing" end
-
-    local desired, missing = {}, {}
-    for combo, value in pairs(ns.db.binds) do
-        if ns.IsDelegated(value) then
-            local interaction = I[INTERACTION_FOR[value]]
-            local _, button = ns.SplitCombo(combo)
-            local bits = ns.ModifierBitsFor(combo)
-
-            if interaction and BUTTON_NAME[button] and bits then
-                desired[#desired + 1] = {
-                    type      = E.Interaction,
-                    actionID  = interaction,
-                    button    = BUTTON_NAME[button],
-                    modifiers = bits,
-                }
-            else
-                missing[#missing + 1] = combo
-            end
-        end
-    end
-
-    -- Idempotent: if the profile already says what we want, do not rewrite it.
-    local written = ns.db.blizzWritten or {}
-    local desiredKeys, sameCount = {}, 0
-    for _, entry in ipairs(desired) do
-        local key = EntryKey(entry)
-        desiredKeys[key] = true
-        if written[key] then sameCount = sameCount + 1 end
-    end
-
-    local writtenCount = 0
-    for _ in pairs(written) do writtenCount = writtenCount + 1 end
-    if sameCount == #desired and writtenCount == #desired then
-        return true, nil, missing  -- already in sync, nothing to say
-    end
-
-    local ok, current = pcall(api.GetProfileInfo)
-    if not ok or type(current) ~= "table" then
-        return false, "could not read the current profile"
-    end
-
-    local out = {}
-    for _, entry in ipairs(current) do
-        local key = EntryKey(entry)
-        -- Drop anything occupying a click we want, and anything we put there
-        -- before that we no longer want. Everything else is the user's.
-        if not desiredKeys[key] and not written[key] then
-            out[#out + 1] = entry
-        end
-    end
-    for _, entry in ipairs(desired) do out[#out + 1] = entry end
-
-    if not pcall(api.SetProfileByInfo, out) then
-        return false, "the client refused the write"
-    end
-
-    -- Read it back. SetProfileByInfo returning without error is not evidence
-    -- that the entry took; the client may reject or normalise it silently.
-    local okAfter, after = pcall(api.GetProfileInfo)
-    if okAfter and type(after) == "table" then
-        local present = {}
-        for _, entry in ipairs(after) do present[EntryKey(entry)] = true end
-        for key in pairs(desiredKeys) do
-            if not present[key] then
-                return false, "the client accepted the write but did not keep it"
-            end
-        end
-    end
-
-    ns.db.blizzWritten = desiredKeys
-    return true, ("%d click(s) handed to Blizzard's bindings"):format(#desired), missing
-end
 
 ------------------------------------------------------------------------------
 -- the manual route
@@ -331,6 +234,27 @@ end
 -- binding by hand in Blizzard's own UI always works, so make that easy to reach
 -- and spell out rather than leaving the user to hunt for it.
 ------------------------------------------------------------------------------
+
+-- What Blizzard's profile currently has bound to one of the actions it owns.
+-- Returns display text, or nil if that action is unbound there.
+function Conflicts.BindingTextFor(action)
+    if not Conflicts.Available() then return nil end
+
+    local E = _G.Enum and _G.Enum.ClickBindingType
+    local I = _G.Enum and _G.Enum.ClickBindingInteraction
+    if not E or not I then return nil end
+
+    local want = I[INTERACTION_FOR[action]]
+    if want == nil then return nil end
+
+    for _, binding in ipairs(Conflicts.GetBindings() or {}) do
+        local raw = binding.raw
+        if raw and raw.type == E.Interaction and (raw.actionID or raw.actionId) == want then
+            return binding.text
+        end
+    end
+    return nil
+end
 
 function Conflicts.OpenBlizzardUI()
     local attempts = {
