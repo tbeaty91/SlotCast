@@ -695,6 +695,21 @@ function Probe.Check(forceChat)
     addf("frame verbs: target=%s menu=%s",
         tostring(ns.FrameVerb("target")), tostring(ns.FrameVerb("menu")))
 
+    -- 0. Which frames are actually managed. A binding that works on party
+    --    frames but not the player or target frame is a discovery problem,
+    --    not a binding problem.
+    section("MANAGED FRAMES")
+    local names = ns.Secure.ManagedNames()
+    addf("  %d frame(s)", #names)
+    for _, frameName in ipairs(names) do addf("    %s", frameName) end
+    for _, expected in ipairs({ "PlayerFrame", "TargetFrame", "FocusFrame" }) do
+        local found = false
+        for _, frameName in ipairs(names) do
+            if frameName == expected then found = true break end
+        end
+        if not found then addf("  MISSING: %s is not registered", expected) end
+    end
+
     -- 1. What the config actually holds. If a binding is missing here, the bug
     --    is in the options UI and the secure layer is innocent.
     section("CONFIGURED BINDINGS")

@@ -86,6 +86,18 @@ function Secure.SampleFrame()
     return nil
 end
 
+-- Names of everything currently managed, sorted. Answers "is PlayerFrame
+-- actually registered?" without guessing.
+function Secure.ManagedNames()
+    local names = {}
+    for frame in pairs(managed) do
+        local ok, name = pcall(frame.GetName, frame)
+        names[#names + 1] = (ok and name) or "(unnamed)"
+    end
+    table.sort(names)
+    return names
+end
+
 function Secure.ManagedCount()
     local n = 0
     for _ in pairs(managed) do n = n + 1 end
@@ -159,6 +171,8 @@ end
 -- covers Blizzard's non-compact frames, which do not register themselves.
 ------------------------------------------------------------------------------
 
+-- Clique's default frame list is the reference here; arena was the one group
+-- missing from ours. Names that do not exist on a given client cost nothing.
 local BLIZZ_FRAMES = {
     "PlayerFrame", "PetFrame",
     "TargetFrame", "TargetFrameToT",
@@ -179,6 +193,15 @@ local function ScanNamed()
         if frame then Secure.Register(frame) end
         if PartyFrame and PartyFrame["MemberFrame" .. i] then
             Secure.Register(PartyFrame["MemberFrame" .. i])
+        end
+    end
+
+    -- Arena. The naming has changed more than once, so try each.
+    for i = 1, 5 do
+        for _, pattern in ipairs({ "ArenaEnemyMatchFrame%d", "ArenaEnemyFrame%d",
+                                   "CompactArenaFrameMember%d", "ArenaPrepFrame%d" }) do
+            local frame = _G[pattern:format(i)]
+            if frame then Secure.Register(frame) end
         end
     end
 
