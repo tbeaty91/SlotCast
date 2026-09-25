@@ -418,9 +418,15 @@ function Dispatch(cmd, rest, restRaw)
             for _, combo in ipairs(missing or {}) do
                 ns.Warn("%s needs re-binding once so its modifier can be captured.", ns.ComboText(combo))
             end
+        elseif rest == "manual" or rest == "help" then
+            local combo, action
+            for c, value in pairs(ns.db.binds) do
+                if value == "menu" then combo, action = c, "menu" break end
+            end
+            ns.Conflicts.ExplainManualBinding(combo, action or "menu")
         else
             ns.Print("usage: |cffffff00/slotcast blizz off|menu|both|r (current: %s)", ns.db.blizzDelegate)
-            ns.Print("Hands Target / Unit menu to Blizzard's click bindings, which still own them.")
+            ns.Print("or |cffffff00/slotcast blizz manual|r for how to bind it by hand.")
         end
 
     elseif cmd == "menuverb" then

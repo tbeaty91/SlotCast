@@ -12,7 +12,7 @@ local Options = ns.Options
 local ROW_H    = 24
 local COL_W    = 300
 local CONTENT_W = 652
-local CONTENT_H = 544
+local CONTENT_H = 572
 local LEFT_X   = 16
 local RIGHT_X  = 336
 
@@ -469,8 +469,32 @@ local function BuildPanel()
     end)
     blizzDelegateButton:SetScript("OnLeave", GameTooltip_Hide)
 
+    local manualBind = PushButton(panel, COL_W, 22, "Show me how to bind it in Blizzard's UI")
+    manualBind:SetPoint("TOPLEFT", LEFT_X, -500)
+    manualBind:SetScript("OnClick", function()
+        -- Prefer a menu binding to explain, since that is the one that cannot
+        -- work any other way.
+        local combo, action
+        for c, value in pairs(ns.db.binds) do
+            if value == "menu" then combo, action = c, "menu" break end
+        end
+        if not combo then
+            for c, value in pairs(ns.db.binds) do
+                if value == "target" then combo, action = c, "target" break end
+            end
+        end
+        ns.Conflicts.ExplainManualBinding(combo, action or "menu")
+    end)
+    manualBind:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Bind it by hand")
+        GameTooltip:AddLine("Opens Blizzard's Click Bindings and prints the steps to chat. This route always works, unlike writing their profile for you.", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    manualBind:SetScript("OnLeave", GameTooltip_Hide)
+
     local clearMine = PushButton(panel, COL_W, 22, "Clear all SlotCast bindings")
-    clearMine:SetPoint("TOPLEFT", LEFT_X, -500)
+    clearMine:SetPoint("TOPLEFT", LEFT_X, -528)
     clearMine:SetScript("OnClick", function()
         wipe(ns.db.binds)
         ns.Refresh(true)
@@ -738,7 +762,7 @@ function Options.RefreshDisplay()
     if ns.MenuSupported and not ns.MenuSupported() then
         for combo, value in pairs(ns.db.binds) do
             if value == "menu" then
-                messages[#messages + 1] = ("|cffff6060%s cannot open a unit menu as a normal binding on this client. Press |r|cffffff00Blizzard handles: unit menu|r|cffff6060 below to hand it to the system that still owns it.|r")
+                messages[#messages + 1] = ("|cffff6060%s cannot open a unit menu as a normal binding on this client - that moved to Blizzard's Click Bindings. Use the buttons below: try handing it over, and if that fails, bind it by hand there and leave this click unbound.|r")
                     :format(ns.ComboText(combo))
             end
         end

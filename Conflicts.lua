@@ -307,8 +307,68 @@ function Conflicts.SyncDelegated()
         return false, "the client refused the write"
     end
 
+    -- Read it back. SetProfileByInfo returning without error is not evidence
+    -- that the entry took; the client may reject or normalise it silently.
+    local okAfter, after = pcall(api.GetProfileInfo)
+    if okAfter and type(after) == "table" then
+        local present = {}
+        for _, entry in ipairs(after) do present[EntryKey(entry)] = true end
+        for key in pairs(desiredKeys) do
+            if not present[key] then
+                return false, "the client accepted the write but did not keep it"
+            end
+        end
+    end
+
     ns.db.blizzWritten = desiredKeys
     return true, ("%d click(s) handed to Blizzard's bindings"):format(#desired), missing
+end
+
+------------------------------------------------------------------------------
+-- the manual route
+--
+-- Writing the profile is the convenient path, not the reliable one. Setting the
+-- binding by hand in Blizzard's own UI always works, so make that easy to reach
+-- and spell out rather than leaving the user to hunt for it.
+------------------------------------------------------------------------------
+
+function Conflicts.OpenBlizzardUI()
+    local attempts = {
+        { "ClickBindingFrame", function()
+            if _G.ClickBindingFrame then _G.ClickBindingFrame:Show() return true end
+        end },
+        { "PlayerSpellsUtil", function()
+            local util = _G.PlayerSpellsUtil
+            if util and util.TogglePlayerSpellsFrame then util.TogglePlayerSpellsFrame() return true end
+        end },
+        { "ToggleSpellBook", function()
+            if _G.ToggleSpellBook then _G.ToggleSpellBook("spell") return true end
+        end },
+    }
+
+    for _, attempt in ipairs(attempts) do
+        local ok, opened = pcall(attempt[2])
+        if ok and opened then return true, attempt[1] end
+    end
+    return false
+end
+
+function Conflicts.ExplainManualBinding(combo, action)
+    local what = (action == "menu") and "Open Context Menu" or "Target"
+    ns.Print("|cffffffffTo bind %s to %s:|r", what, combo and ns.ComboText(combo) or "a click")
+    ns.Print("  1. Open the Spellbook and find the |cffffff00Click Bindings|r tab.")
+    ns.Print("  2. Drag |cffffff00%s|r from the list onto an empty binding row.", what)
+    ns.Print("  3. Click the row's key field, then %s while holding the modifiers.",
+        combo and ("press " .. ns.ComboText(combo)) or "press the click you want")
+    ns.Print("  4. In SlotCast, leave that click |cffffff00unbound|r - it only overrides")
+    ns.Print("     Blizzard on clicks it binds itself.")
+
+    local opened, how = Conflicts.OpenBlizzardUI()
+    if opened then
+        ns.Print("(opened via %s)", how)
+    else
+        ns.Warn("Could not open that panel from here - reach it from the Spellbook.")
+    end
 end
 
 ------------------------------------------------------------------------------
