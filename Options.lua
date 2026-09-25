@@ -12,7 +12,7 @@ local Options = ns.Options
 local ROW_H    = 24
 local COL_W    = 300
 local CONTENT_W = 652
-local CONTENT_H = 632
+local CONTENT_H = 676
 local LEFT_X   = 16
 local RIGHT_X  = 336
 
@@ -32,6 +32,8 @@ local function Label(parent, text, font)
     local fs = parent:CreateFontString(nil, "ARTWORK", font or "GameFontHighlightSmall")
     fs:SetText(text or "")
     fs:SetJustifyH("LEFT")
+    fs:SetJustifyV("TOP")
+    fs:SetSpacing(2)  -- wrapped lines sit too close together without this
     return fs
 end
 
@@ -574,7 +576,7 @@ local function BuildPanel()
 
     -- enable ------------------------------------------------------------------
     local enable = CheckBox(panel, "Enable click bindings")
-    enable:SetPoint("TOPLEFT", LEFT_X, -68)
+    enable:SetPoint("TOPLEFT", LEFT_X, -76)
     enable:SetScript("OnClick", function(self)
         ns.db.enabled = not ns.db.enabled
         self:SetChecked(ns.db.enabled)
@@ -584,11 +586,11 @@ local function BuildPanel()
 
     -- bar selector ------------------------------------------------------------
     local barLabel = Label(panel, "Source action bar", "GameFontNormal")
-    barLabel:SetPoint("TOPLEFT", LEFT_X, -100)
+    barLabel:SetPoint("TOPLEFT", LEFT_X, -108)
 
     for i = 1, 8 do
         local btn = PushButton(panel, 32, 22, tostring(i))
-        btn:SetPoint("TOPLEFT", LEFT_X + (i - 1) * 35, -120)
+        btn:SetPoint("TOPLEFT", LEFT_X + (i - 1) * 35, -128)
         btn.sel = btn:CreateTexture(nil, "OVERLAY")
         btn.sel:SetAllPoints()
         btn.sel:SetColorTexture(1, 0.82, 0, 0.3)
@@ -610,22 +612,24 @@ local function BuildPanel()
     end
 
     warningText = Label(panel, "", "GameFontHighlightSmall")
-    warningText:SetPoint("TOPLEFT", LEFT_X, -150)
+    warningText:SetPoint("TOPLEFT", LEFT_X, -158)
     warningText:SetWidth(COL_W)
+    warningText:SetHeight(72)
     warningText:SetJustifyV("TOP")
 
     -- specials ----------------------------------------------------------------
     local specialHeader = Label(panel, "Unit frame clicks", "GameFontNormal")
-    specialHeader:SetPoint("TOPLEFT", LEFT_X, -196)
+    specialHeader:SetPoint("TOPLEFT", LEFT_X, -238)
 
-    local specialHint = Label(panel, "Target and Unit menu live in WoW's own Click Bindings - click either row to open it. The rest are SlotCast's; unbound ones keep the frame's normal behaviour.", "GameFontDisableSmall")
-    specialHint:SetPoint("TOPLEFT", LEFT_X, -214)
+    local specialHint = Label(panel, "Target and Unit menu open WoW's Click Bindings. Unbound rows keep the frame's normal behaviour.", "GameFontDisableSmall")
+    specialHint:SetPoint("TOPLEFT", LEFT_X, -256)
     specialHint:SetWidth(COL_W)
+    specialHint:SetHeight(36)
     specialHint:SetJustifyV("TOP")
 
     for i, special in ipairs(ns.SPECIALS) do
         local row = CreateRow(panel, false)
-        row:SetPoint("TOPLEFT", LEFT_X, -258 - (i - 1) * ROW_H)
+        row:SetPoint("TOPLEFT", LEFT_X, -300 - (i - 1) * ROW_H)
         row.target = special.key
         row.labelText = special.label
         row.label:SetText(special.label)
@@ -634,22 +638,23 @@ local function BuildPanel()
 
     -- Blizzard conflicts ------------------------------------------------------
     local conflictHeader = Label(panel, "Blizzard Click Bindings", "GameFontNormal")
-    conflictHeader:SetPoint("TOPLEFT", LEFT_X, -370)
+    conflictHeader:SetPoint("TOPLEFT", LEFT_X, -432)
 
     conflictText = Label(panel, "", "GameFontHighlightSmall")
-    conflictText:SetPoint("TOPLEFT", LEFT_X, -390)
+    conflictText:SetPoint("TOPLEFT", LEFT_X, -452)
     conflictText:SetWidth(COL_W)
+    conflictText:SetHeight(54)
     conflictText:SetJustifyV("TOP")
 
     local rescan = PushButton(panel, 142, 22, "Re-check")
-    rescan:SetPoint("TOPLEFT", LEFT_X, -444)
+    rescan:SetPoint("TOPLEFT", LEFT_X, -512)
     rescan:SetScript("OnClick", function()
         Options.RefreshDisplay()
         ns.Conflicts.Report(true)
     end)
 
     local clearBlizz = PushButton(panel, 152, 22, "Clear Blizzard's")
-    clearBlizz:SetPoint("TOPLEFT", LEFT_X + 148, -444)
+    clearBlizz:SetPoint("TOPLEFT", LEFT_X + 148, -512)
     clearBlizz:SetScript("OnClick", function()
         if ns.Conflicts.Clear() then
             ns.Print("cleared Blizzard's click bindings.")
@@ -660,7 +665,7 @@ local function BuildPanel()
     end)
 
     blizzDelegateButton = PushButton(panel, COL_W, 22, "Open Blizzard's Click Bindings (/clickcasting)")
-    blizzDelegateButton:SetPoint("TOPLEFT", LEFT_X, -472)
+    blizzDelegateButton:SetPoint("TOPLEFT", LEFT_X, -540)
     blizzDelegateButton:SetScript("OnClick", function()
         ns.Conflicts.ExplainManualBinding(nil, "menu")
     end)
@@ -673,7 +678,7 @@ local function BuildPanel()
     blizzDelegateButton:SetScript("OnLeave", GameTooltip_Hide)
 
     local clearMine = PushButton(panel, COL_W, 22, "Clear all SlotCast bindings")
-    clearMine:SetPoint("TOPLEFT", LEFT_X, -500)
+    clearMine:SetPoint("TOPLEFT", LEFT_X, -568)
     clearMine:SetScript("OnClick", function()
         wipe(ns.db.binds)
         ns.Refresh(true)
@@ -683,7 +688,7 @@ local function BuildPanel()
     slotHeader = Label(panel, "Bar slots", "GameFontNormal")
     slotHeader:SetPoint("TOPLEFT", RIGHT_X, -68)
 
-    local slotHint = Label(panel, "Drag a spell into the slot in-game; the binding follows it. For the grid mapping, a Vertical bar 3 columns wide works best.", "GameFontDisableSmall")
+    local slotHint = Label(panel, "Drag a spell into the slot; the binding follows it.", "GameFontDisableSmall")
     slotHint:SetPoint("TOPLEFT", RIGHT_X, -86)
     slotHint:SetWidth(COL_W)
 
@@ -729,7 +734,7 @@ local function BuildPanel()
     end
 
     local autoMap = PushButton(panel, COL_W, 22, "Map grid to clicks")
-    autoMap:SetPoint("TOPLEFT", RIGHT_X, -426)
+    autoMap:SetPoint("TOPLEFT", RIGHT_X, -428)
     autoMap:SetScript("OnClick", AutoMapGrid)
     panel.autoMap = autoMap
     autoMap:SetScript("OnEnter", function(self)
@@ -749,21 +754,26 @@ local function BuildPanel()
     -- Orientation is detected, not asked about: the shorter axis carries the
     -- mouse buttons because buttons are scarcer than modifiers. This just says
     -- what it worked out, so the mapping is never a surprise.
+    -- Tips and warnings first, then what the grid currently means, then the
+    -- grid itself. Reading downwards should answer "why" before "what".
     previewHeader = Label(panel, "", "GameFontHighlightSmall")
-    previewHeader:SetPoint("TOPLEFT", RIGHT_X, -478)
+    previewHeader:SetPoint("TOPLEFT", RIGHT_X, -484)
     previewHeader:SetWidth(COL_W)
-
-    previewFrame = CreateFrame("Frame", nil, panel)
-    previewFrame:SetPoint("TOPLEFT", RIGHT_X, -496)
-    previewFrame:SetSize(COL_W, 104)
+    previewHeader:SetHeight(30)
 
     gridAxisLabel = Label(panel, "", "GameFontDisableSmall")
-    gridAxisLabel:SetPoint("TOPLEFT", RIGHT_X, -604)
+    gridAxisLabel:SetPoint("TOPLEFT", RIGHT_X, -518)
+    gridAxisLabel:SetWidth(COL_W)
+    gridAxisLabel:SetHeight(34)
+
+    previewFrame = CreateFrame("Frame", nil, panel)
+    previewFrame:SetPoint("TOPLEFT", RIGHT_X, -556)
+    previewFrame:SetSize(COL_W, 104)
     gridAxisLabel:SetWidth(COL_W)
     gridAxisLabel:SetJustifyV("TOP")
 
     gridOrderButton = PushButton(panel, 148, 22, "")
-    gridOrderButton:SetPoint("TOPLEFT", RIGHT_X, -450)
+    gridOrderButton:SetPoint("TOPLEFT", RIGHT_X, -454)
     gridOrderButton:SetScript("OnClick", function()
         ns.db.gridButtonOrder = (ns.db.gridButtonOrder == "LMR") and "LRM" or "LMR"
         Options.RefreshDisplay()
@@ -778,7 +788,7 @@ local function BuildPanel()
     gridOrderButton:SetScript("OnLeave", GameTooltip_Hide)
 
     local editModeButton = PushButton(panel, 148, 22, "Open Edit Mode")
-    editModeButton:SetPoint("TOPLEFT", RIGHT_X + 152, -450)
+    editModeButton:SetPoint("TOPLEFT", RIGHT_X + 152, -454)
     editModeButton:SetScript("OnClick", function()
         if not ns.OpenEditMode() then
             ns.Warn("could not open Edit Mode - press Escape and choose it from the menu.")
@@ -902,16 +912,17 @@ function Options.RefreshDisplay()
     if not grid then
         axisText = "bar layout not readable"
     elseif axis == "enumerate" then
-        axisText = ("%d slots map in reading order: %s, then the same with Shift, Ctrl, Alt.")
+        axisText = ("%d slots, mapped in reading order: %s, then the same with Shift, Ctrl and Alt.")
             :format(#slotRows, buttonWord)
     elseif axis == "col" then
-        axisText = ("%d wide x %d tall - columns are %s, rows are none / Shift / Ctrl / Alt.")
+        axisText = ("%d wide x %d tall. Columns are %s; rows are none / Shift / Ctrl / Alt.")
             :format(gridCols, gridRows, buttonWord)
     else
-        axisText = ("%d wide x %d tall - rows are %s, columns are none / Shift / Ctrl / Alt.")
+        axisText = ("%d wide x %d tall. Rows are %s; columns are none / Shift / Ctrl / Alt.")
             :format(gridCols, gridRows, buttonWord)
     end
-    gridAxisLabel:SetText(("|cff808080%s%s|r"):format(axisText, forced and " (forced)" or ""))
+    gridAxisLabel:SetText(("|cffa0a0a0Current grid alignment:|r |cff808080%s%s|r")
+        :format(axisText, forced and " (forced)" or ""))
 
     UpdatePreview(grid, gridRows, gridCols)
 
