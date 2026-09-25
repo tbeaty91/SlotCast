@@ -470,7 +470,7 @@ local function BuildPanel()
         Options.RefreshDisplay()
     end)
 
-    blizzDelegateButton = PushButton(panel, COL_W, 22, "Open Blizzard's Click Bindings")
+    blizzDelegateButton = PushButton(panel, COL_W, 22, "Open Blizzard's Click Bindings (/clickcasting)")
     blizzDelegateButton:SetPoint("TOPLEFT", LEFT_X, -472)
     blizzDelegateButton:SetScript("OnClick", function()
         ns.Conflicts.ExplainManualBinding(nil, "menu")

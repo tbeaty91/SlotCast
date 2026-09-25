@@ -256,7 +256,30 @@ function Conflicts.BindingTextFor(action)
     return nil
 end
 
+-- Run a slash command by its text, whatever handler the client filed it under.
+-- Looking the command up beats hardcoding a frame name: the UI behind
+-- /clickcasting has been rebuilt more than once, but the command has not.
+local function RunSlashCommand(command)
+    command = command:lower()
+    for key, value in pairs(_G) do
+        if type(key) == "string" and type(value) == "string" and value:lower() == command then
+            local handler = key:match("^SLASH_(.+)%d+$")
+            if handler and type(SlashCmdList) == "table" and type(SlashCmdList[handler]) == "function" then
+                if pcall(SlashCmdList[handler], "") then return true, command end
+            end
+        end
+    end
+    return false
+end
+
+ns.RunSlashCommand = RunSlashCommand
+
 function Conflicts.OpenBlizzardUI()
+    -- The slash command first: it is the documented way in and survives the
+    -- frame being renamed or rebuilt.
+    local ok, how = RunSlashCommand("/clickcasting")
+    if ok then return true, how end
+
     local attempts = {
         { "ClickBindingFrame", function()
             if _G.ClickBindingFrame then _G.ClickBindingFrame:Show() return true end
@@ -271,28 +294,27 @@ function Conflicts.OpenBlizzardUI()
     }
 
     for _, attempt in ipairs(attempts) do
-        local ok, opened = pcall(attempt[2])
-        if ok and opened then return true, attempt[1] end
+        local okAttempt, opened = pcall(attempt[2])
+        if okAttempt and opened then return true, attempt[1] end
     end
     return false
 end
 
 function Conflicts.ExplainManualBinding(combo, action)
     local what = (action == "menu") and "Open Context Menu" or "Target"
-    ns.Print("|cffffffffTo bind %s to %s:|r", what, combo and ns.ComboText(combo) or "a click")
-    ns.Print("  1. Open the Spellbook and find the |cffffff00Click Bindings|r tab.")
-    ns.Print("  2. Drag |cffffff00%s|r from the list onto an empty binding row.", what)
-    ns.Print("  3. Click the row's key field, then %s while holding the modifiers.",
-        combo and ("press " .. ns.ComboText(combo)) or "press the click you want")
-    ns.Print("  4. In SlotCast, leave that click |cffffff00unbound|r - it only overrides")
-    ns.Print("     Blizzard on clicks it binds itself.")
 
-    local opened, how = Conflicts.OpenBlizzardUI()
-    if opened then
-        ns.Print("(opened via %s)", how)
-    else
-        ns.Warn("Could not open that panel from here - reach it from the Spellbook.")
+    local opened = Conflicts.OpenBlizzardUI()
+    if not opened then
+        ns.Warn("Could not open it from here - type |cffffff00/clickcasting|r yourself.")
     end
+
+    ns.Print("|cffffffffTo bind %s:|r", what)
+    ns.Print("  1. In the |cffffff00/clickcasting|r window, drag |cffffff00%s|r onto a binding row.", what)
+    ns.Print("  2. Click that row's key field and press the click you want,")
+    ns.Print("     holding any modifiers at the same time.")
+    ns.Print("  3. SlotCast reads it back and shows it in its own list.")
+    ns.Print("Leave that click unbound in SlotCast - it only overrides Blizzard")
+    ns.Print("on clicks it binds itself.")
 end
 
 ------------------------------------------------------------------------------
