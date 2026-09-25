@@ -733,6 +733,10 @@ function Probe.Check()
         ns.Print("modified clicks: %s", table.concat(parts, "  "))
     end
 
+    ns.Print("bindings fire on mouse %s.%s",
+        ns.db.clickOnDown and "|cffff6060DOWN|r" or "up",
+        ns.db.clickOnDown and "  <-- Target/Menu do not work on down" or "")
+
     for _, attr in ipairs({ "checkselfcast", "checkfocuscast" }) do
         local ok, value = pcall(frame.GetAttribute, frame, attr)
         ns.Print("  frame [%s] = %s", attr, ok and tostring(value) or "?")

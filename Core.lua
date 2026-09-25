@@ -95,6 +95,12 @@ ns.defaults = {
     rankMode      = "slot",
     rankOverrides = {},
 
+    -- Fire click bindings on press rather than release. Off by default: unit
+    -- frames are up-stroke frames, and "target"/"menu" do not work on down.
+    -- Only worth turning on if you want casts a few milliseconds earlier and
+    -- bind nothing but spells.
+    clickOnDown = false,
+
     -- How "Map grid to clicks" reads a bar's shape. Neither is more correct;
     -- a 3-wide bar wants columns as buttons, a 3-tall one wants rows.
     gridTranspose   = false,      -- false: columns are mouse buttons
@@ -371,6 +377,20 @@ function Dispatch(cmd, rest)
             ns.Print("usage: |cffffff00/slotcast rank slot|r or |cffffff00/slotcast rank highest|r (current: %s)", ns.db.rankMode)
         end
 
+    elseif cmd == "clicks" then
+        if rest == "up" or rest == "down" then
+            ns.db.clickOnDown = (rest == "down")
+            ns.Print("bindings now fire on mouse %s.", rest)
+            if ns.db.clickOnDown then
+                ns.Warn("note: Target unit and Unit menu do not work on the down-stroke.")
+            end
+            ns.Secure.UpdateClickRegistration()
+            ns.Refresh(true)
+        else
+            ns.Print("usage: |cffffff00/slotcast clicks up|r or |cffffff00/slotcast clicks down|r (current: %s)",
+                ns.db.clickOnDown and "down" or "up")
+        end
+
     elseif cmd == "castmode" then
         if rest == "spell" or rest == "macro" then
             ns.db.castMode = rest
@@ -386,7 +406,7 @@ function Dispatch(cmd, rest)
         ns.Refresh(true)
 
     else
-        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
+        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00clicks|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
     end
 end
 

@@ -19,15 +19,19 @@ local NIL = false
 -- click registration
 --
 -- Unit frames register only for left/right up by default, so middle-click and
--- the side buttons never reach the secure handler until we widen this.
--- Down-vs-up follows the same cvar Blizzard's own action buttons use, so a
--- click-cast fires at the same moment as a keybind.
+-- the side buttons never reach the secure handler until we widen this. That
+-- part is necessary.
+--
+-- Down-vs-up is not. This used to follow the ActionButtonUseKeyDown cvar, which
+-- was a mistake: that cvar governs ACTION BUTTONS. Blizzard's unit frames stay
+-- on the up-stroke, and so does Clique. Casting works on the down-stroke, but
+-- "target" and "menu" run on the up-stroke -- so registering unit frames for
+-- AnyDown left spells working while silently killing target and menu, which is
+-- a maddening bug to look at because two thirds of the addon still works.
 ------------------------------------------------------------------------------
 
 local function ClickRegistration()
-    local down = C_CVar and C_CVar.GetCVarBool and C_CVar.GetCVarBool("ActionButtonUseKeyDown")
-    if down == nil and GetCVarBool then down = GetCVarBool("ActionButtonUseKeyDown") end
-    return down and "AnyDown" or "AnyUp"
+    return (ns.db and ns.db.clickOnDown) and "AnyDown" or "AnyUp"
 end
 
 ------------------------------------------------------------------------------
