@@ -683,7 +683,7 @@ local function BuildPanel()
     slotHeader = Label(panel, "Bar slots", "GameFontNormal")
     slotHeader:SetPoint("TOPLEFT", RIGHT_X, -68)
 
-    local slotHint = Label(panel, "Drag a spell into the slot in-game; the binding follows it.", "GameFontDisableSmall")
+    local slotHint = Label(panel, "Drag a spell into the slot in-game; the binding follows it. For the grid mapping, a Vertical bar 3 columns wide works best.", "GameFontDisableSmall")
     slotHint:SetPoint("TOPLEFT", RIGHT_X, -86)
     slotHint:SetWidth(COL_W)
 
@@ -739,6 +739,8 @@ local function BuildPanel()
         GameTooltip:AddLine("Worked out from the bar's shape - a 3-wide and a 3-tall bar both read correctly.", 0.8, 0.8, 0.8, true)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Read from where the buttons actually sit on screen, so it works whatever order this client folds bars in.", 0.5, 0.8, 1, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Best with the bar set to |cffffffffVertical|r in Edit Mode, 3 columns wide: Left / Middle / Right across the top, Shift / Ctrl / Alt down the side.", 0.5, 1, 0.5, true)
         GameTooltip:AddLine("Replaces existing slot bindings. Target/menu are left alone.", 1, 0.6, 0.2, true)
         GameTooltip:Show()
     end)
@@ -905,6 +907,11 @@ function Options.RefreshDisplay()
     elseif ns.db.lastMappedShape and shape ~= ns.db.lastMappedShape then
         previewHeader:SetText(("|cffff8080Bar was %s when mapped, now %s - press Map grid to clicks again.|r")
             :format(ns.db.lastMappedShape, shape))
+    elseif gridCols > gridRows then
+        -- A bar wider than it is tall puts the mouse buttons on the rows, so
+        -- Left / Middle / Right run downwards. It works, but it reads badly
+        -- against a mouse, which is laid out left to right.
+        previewHeader:SetText("|cffffcc00Tip: set this bar to Vertical in Edit Mode. Left / Middle / Right then run across, with modifiers down.|r")
     else
         previewHeader:SetText("|cffa0a0a0Your bar, and the click each slot gets:|r")
     end

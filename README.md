@@ -84,6 +84,17 @@ but that means the binding changes when the page does. Use bars 6–8.
 
 ## Mapping the bar's shape onto clicks
 
+> **Recommended layout:** set the source bar to **Vertical** in Edit Mode, **3
+> columns** wide. That gives a 3×4 grid where Left / Middle / Right run across
+> the top and no-modifier / Shift / Ctrl / Alt run down the side — matching both
+> how a mouse is laid out and how modifier lists are usually written.
+>
+> A bar wider than it is tall still works, but the mouse buttons end up on the
+> *rows*, so Left / Middle / Right run downwards. Bindings are tied to screen
+> positions, so reshaping a bar moves every slot to a different cell — pick a
+> layout and stay with it. SlotCast warns you when the shape no longer matches
+> the mapping.
+
 Edit Mode can lay a bar out as a grid — 3 columns by 4 rows, say. That shape can
 be the binding scheme: columns are Left / Middle / Right, rows are no modifier /
 Shift / Ctrl / Alt. Twelve clicks, and the bar on screen is the reference card.
