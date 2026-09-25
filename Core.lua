@@ -128,6 +128,7 @@ ns.defaults = {
     -- axis for mouse buttons, which is right for both a 3-wide and a 3-tall
     -- bar; "col"/"row" force it.
     gridAxis        = "auto",
+    lastMappedShape = nil,        -- the bar shape the current mapping was made for
     gridButtonOrder = "LMR",      -- or "LRM", for people who find middle-click awkward
 
     -- "spell" uses type="spell" so the secure handler supplies the unit.

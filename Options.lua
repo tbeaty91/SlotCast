@@ -12,7 +12,7 @@ local Options = ns.Options
 local ROW_H    = 24
 local COL_W    = 300
 local CONTENT_W = 652
-local CONTENT_H = 544
+local CONTENT_H = 632
 local LEFT_X   = 16
 local RIGHT_X  = 336
 
@@ -20,7 +20,7 @@ local panel, category, standalone, settingsHost
 local barButtons, specialRows, slotRows = {}, {}, {}
 local warningText, conflictText, slotHeader, rankDefaultLabel
 local gridCache, gridIs2D
-local gridAxisLabel, gridOrderButton
+local gridAxisLabel, gridOrderButton, previewHeader
 local blizzDelegateButton
 local rankDefaultButtons = {}
 
@@ -305,6 +305,8 @@ local function AutoMapGrid()
         end
     end
 
+    ns.db.lastMappedShape = ("%dx%d"):format(cols, rows)
+
     local how = (axis == "enumerate") and "in order"
              or ((axis == "col") and "columns are mouse buttons" or "rows are mouse buttons")
     ns.Print("mapped a %dx%d grid, %s%s: %d slot(s) bound%s.",
@@ -324,6 +326,76 @@ Options.AutoMapGrid = AutoMapGrid
 ------------------------------------------------------------------------------
 -- rows
 ------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+-- grid preview
+--
+-- The mapping is positional, so changing a bar's shape changes which axis
+-- carries the mouse buttons -- and the same spell ends up on a different click.
+-- That is correct and deeply confusing to read about, so draw it instead.
+------------------------------------------------------------------------------
+
+local SHORT_BUTTON = { [1] = "L", [2] = "R", [3] = "M", [4] = "4", [5] = "5" }
+
+local function ShortCombo(combo)
+    if not combo then return "-" end
+    local prefix, button = ns.SplitCombo(combo)
+    local mods = ""
+    if prefix:find("alt-")   then mods = mods .. "A" end
+    if prefix:find("ctrl-")  then mods = mods .. "C" end
+    if prefix:find("shift-") then mods = mods .. "S" end
+    return (mods ~= "" and (mods .. "-") or "") .. (SHORT_BUTTON[button] or tostring(button))
+end
+
+local previewCells, previewFrame = {}, nil
+
+local function PreviewCell(index)
+    if previewCells[index] then return previewCells[index] end
+
+    local cell = CreateFrame("Frame", nil, previewFrame)
+    cell:SetSize(48, 18)
+
+    cell.bg = cell:CreateTexture(nil, "BACKGROUND")
+    cell.bg:SetAllPoints()
+    cell.bg:SetColorTexture(1, 1, 1, 0.06)
+
+    cell.text = cell:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    cell.text:SetPoint("CENTER")
+
+    previewCells[index] = cell
+    return cell
+end
+
+local function UpdatePreview(grid, rows, cols)
+    for _, cell in pairs(previewCells) do cell:Hide() end
+    if not grid or not rows or not cols or cols > 6 or rows > 6 then return end
+
+    -- Which click each cell carries, looked up from the live bindings rather
+    -- than recomputed, so the picture cannot disagree with the behaviour.
+    local comboAt = {}
+    for combo, value in pairs(ns.db.binds) do
+        if type(value) == "number" and grid[value] then
+            local cell = grid[value]
+            comboAt[cell.row .. ":" .. cell.col] = combo
+        end
+    end
+
+    local width = math.min(48, math.floor(COL_W / cols) - 2)
+    local n = 0
+    for row = 1, rows do
+        for col = 1, cols do
+            n = n + 1
+            local cell = PreviewCell(n)
+            cell:SetSize(width, 18)
+            cell:ClearAllPoints()
+            cell:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", (col - 1) * (width + 2), -(row - 1) * 17)
+            local combo = comboAt[row .. ":" .. col]
+            cell.text:SetText(combo and ShortCombo(combo) or "|cff505050-|r")
+            cell.bg:SetColorTexture(1, 1, 1, combo and 0.08 or 0.03)
+            cell:Show()
+        end
+    end
+end
 
 local function CreateRow(parent, hasIcon)
     local row = CreateFrame("Frame", nil, parent)
@@ -675,8 +747,16 @@ local function BuildPanel()
     -- Orientation is detected, not asked about: the shorter axis carries the
     -- mouse buttons because buttons are scarcer than modifiers. This just says
     -- what it worked out, so the mapping is never a surprise.
+    previewHeader = Label(panel, "", "GameFontHighlightSmall")
+    previewHeader:SetPoint("TOPLEFT", RIGHT_X, -478)
+    previewHeader:SetWidth(COL_W)
+
+    previewFrame = CreateFrame("Frame", nil, panel)
+    previewFrame:SetPoint("TOPLEFT", RIGHT_X, -496)
+    previewFrame:SetSize(COL_W, 104)
+
     gridAxisLabel = Label(panel, "", "GameFontDisableSmall")
-    gridAxisLabel:SetPoint("TOPLEFT", RIGHT_X, -476)
+    gridAxisLabel:SetPoint("TOPLEFT", RIGHT_X, -604)
     gridAxisLabel:SetWidth(COL_W)
     gridAxisLabel:SetJustifyV("TOP")
 
@@ -813,6 +893,21 @@ function Options.RefreshDisplay()
             :format(gridCols, gridRows, buttonWord)
     end
     gridAxisLabel:SetText(("|cff808080%s%s|r"):format(axisText, forced and " (forced)" or ""))
+
+    UpdatePreview(grid, gridRows, gridCols)
+
+    -- Reshaping a bar moves every slot to a different cell, so the mapping
+    -- made for the old shape no longer describes the new one. Say so rather
+    -- than letting it look like the bindings scrambled themselves.
+    local shape = grid and ("%dx%d"):format(gridCols, gridRows) or nil
+    if not grid then
+        previewHeader:SetText("|cff808080Bar layout not readable.|r")
+    elseif ns.db.lastMappedShape and shape ~= ns.db.lastMappedShape then
+        previewHeader:SetText(("|cffff8080Bar was %s when mapped, now %s - press Map grid to clicks again.|r")
+            :format(ns.db.lastMappedShape, shape))
+    else
+        previewHeader:SetText("|cffa0a0a0Your bar, and the click each slot gets:|r")
+    end
     if grid then
         slotHeader:SetText(("%s  |cff6699cc%dx%d|r"):format(
             ns.BAR_NAMES[ns.db.bar] or ("Bar " .. ns.db.bar), gridCols, gridRows))
