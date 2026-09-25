@@ -13,7 +13,7 @@ local ADDON, ns = ...
 ns.Probe = {}
 local Probe = ns.Probe
 
-local REPORT_VERSION = 4
+local REPORT_VERSION = 5
 
 ------------------------------------------------------------------------------
 -- report building
@@ -409,6 +409,14 @@ local function ProbeSecure()
                             "shift-type1", "spell1", "macrotext1" }) do
         local oka, value = pcall(target.GetAttribute, target, attr)
         addf("    [%s] = %s", attr, oka and tostring(value) or "ERROR")
+    end
+
+    -- The verbs SlotCast will use for "Target unit" and "Unit menu", learned
+    -- from the frame above rather than assumed. "togglemenu" is what the
+    -- templates document; real frames tend to carry "menu".
+    if type(ns.FrameVerb) == "function" then
+        addf("  verbs in use: target=%s menu=%s",
+            tostring(ns.FrameVerb("target")), tostring(ns.FrameVerb("menu")))
     end
 end
 

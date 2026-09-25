@@ -334,6 +334,11 @@ function Dispatch(cmd, rest)
                 table.concat(missing, ", "))
         end
 
+        if type(ns.FrameVerb) == "function" then
+            ns.Print("frame verbs: target=%s menu=%s",
+                tostring(ns.FrameVerb("target")), tostring(ns.FrameVerb("menu")))
+        end
+
         if #ns.unavailableEvents > 0 then
             ns.Print("events not on this client (skipped): %s", table.concat(ns.unavailableEvents, ", "))
         end

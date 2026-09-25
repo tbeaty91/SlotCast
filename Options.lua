@@ -159,7 +159,7 @@ local function AutoMapGrid()
         if type(value) == "number" then ns.db.binds[combo] = nil end
     end
 
-    local mapped, skipped = 0, 0
+    local mapped, skipped, protected = 0, 0, {}
     for index = 1, ns.SLOTS_PER_BAR do
         local cell = grid[index]
         if cell then
@@ -171,8 +171,18 @@ local function AutoMapGrid()
 
             if buttons[btnAxis] and ROW_MODS[modAxis] then
                 local mods = ROW_MODS[modAxis]
-                ns.db.binds[ns.MakeCombo(buttons[btnAxis], mods[1], mods[2], mods[3])] = index
-                mapped = mapped + 1
+                local combo = ns.MakeCombo(buttons[btnAxis], mods[1], mods[2], mods[3])
+                local existing = ns.db.binds[combo]
+
+                -- Slot bindings were cleared above, so anything still here is a
+                -- unit-frame action the user chose deliberately. A bulk mapping
+                -- does not get to overwrite that.
+                if existing ~= nil then
+                    protected[#protected + 1] = ("%s (%s)"):format(ns.ComboText(combo), DescribeTarget(existing))
+                else
+                    ns.db.binds[combo] = index
+                    mapped = mapped + 1
+                end
             else
                 skipped = skipped + 1
             end
@@ -182,6 +192,12 @@ local function AutoMapGrid()
     ns.Print("mapped a %dx%d grid: %d slot(s) bound%s.",
         cols, rows, mapped,
         skipped > 0 and (", %d outside the 5-column / 8-row range"):format(skipped) or "")
+
+    if #protected > 0 then
+        ns.Warn("left alone, already bound to a unit-frame action: %s", table.concat(protected, ", "))
+        ns.Warn("Clear those in the left column first if you want the grid to have them.")
+    end
+
     ns.Refresh(true)
 end
 

@@ -263,15 +263,51 @@ ns.SPECIALS = {
     { key = "follow", label = "Follow unit" },
 }
 
+-- What this client calls "target the unit" and "open the unit menu".
+--
+-- Do not guess these. SecureActionButtonTemplate documents "togglemenu", but
+-- Blizzard's own unit frames carry "*type2 = menu" -- a different verb, handled
+-- by SecureUnitButton_OnClick rather than the generic action handler. Setting
+-- the wrong one produces a click that silently does nothing.
+--
+-- So read the verbs off a real frame instead. Whatever this client uses to open
+-- its own menus is what SlotCast uses too.
+local DEFAULT_VERBS = { target = "target", menu = "togglemenu" }
+local detectedVerbs
+
+function ns.FrameVerb(which)
+    if detectedVerbs then return detectedVerbs[which] end
+
+    local sample = ns.Secure and ns.Secure.SampleFrame and ns.Secure.SampleFrame()
+    if not sample then
+        -- Nothing to learn from yet; answer from the defaults without caching,
+        -- so the real values are picked up once frames exist.
+        return DEFAULT_VERBS[which]
+    end
+
+    local verbs = { target = DEFAULT_VERBS.target, menu = DEFAULT_VERBS.menu }
+    for attr, key in pairs({ ["*type1"] = "target", ["*type2"] = "menu" }) do
+        local ok, value = pcall(sample.GetAttribute, sample, attr)
+        if ok and type(value) == "string" and value ~= "" then verbs[key] = value end
+    end
+
+    detectedVerbs = verbs
+    return verbs[which]
+end
+
+function ns.WipeFrameVerbs()
+    detectedVerbs = nil
+end
+
 local SPECIAL_SPEC = {
-    target = { type = "target" },
-    menu   = { type = "togglemenu" },
-    focus  = { type = "focus" },
-    assist = { type = "assist" },
+    target = function() return { type = ns.FrameVerb("target") } end,
+    menu   = function() return { type = ns.FrameVerb("menu") } end,
+    focus  = function() return { type = "focus" } end,
+    assist = function() return { type = "assist" } end,
     -- There is no "follow" action type, and RunMacroText gets no unit, so this
     -- one leans on mouseover -- which is always correct for a click-cast, since
     -- the cursor is over the frame by definition.
-    follow = { type = "macro", key = "macrotext", value = "/follow [@mouseover,exists]" },
+    follow = function() return { type = "macro", key = "macrotext", value = "/follow [@mouseover,exists]" } end,
 }
 
 ------------------------------------------------------------------------------
@@ -511,8 +547,9 @@ function Slots.ResolveBind(value)
     if type(value) == "number" then
         return Slots.ReadSlot(Slots.SlotFor(value), value)  -- SlotFor may be nil; ReadSlot handles it
     end
-    local spec = SPECIAL_SPEC[value]
-    if not spec then return nil end
+    local build = SPECIAL_SPEC[value]
+    if not build then return nil end
+    local spec = build()
     local label
     for _, s in ipairs(ns.SPECIALS) do
         if s.key == value then label = s.label break end

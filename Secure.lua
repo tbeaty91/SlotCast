@@ -74,6 +74,12 @@ function Secure.FlushPending()
     end
 end
 
+-- Any managed frame, for reading back what this client's frames actually do.
+function Secure.SampleFrame()
+    for frame in pairs(managed) do return frame end
+    return nil
+end
+
 function Secure.ManagedCount()
     local n = 0
     for _ in pairs(managed) do n = n + 1 end
