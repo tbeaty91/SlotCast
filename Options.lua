@@ -693,6 +693,18 @@ function Options.RefreshDisplay()
             :format(#conflicts, table.concat(names, ", "))
     end
 
+    -- A menu binding that cannot work is worse than no menu binding: it looks
+    -- broken rather than unsupported, and it blocks Blizzard's own binding on
+    -- that click.
+    if ns.MenuSupported and not ns.MenuSupported() then
+        for combo, value in pairs(ns.db.binds) do
+            if value == "menu" then
+                messages[#messages + 1] = ("|cffff6060%s cannot open a unit menu on this client - it moved to Blizzard's Click Bindings, which add-ons can't drive. Unbind it and set it in Options > Click Bindings instead; SlotCast leaves clicks it doesn't bind alone.|r")
+                    :format(ns.ComboText(combo))
+            end
+        end
+    end
+
     for _, entry in ipairs(ns.StrandedBindings and ns.StrandedBindings() or {}) do
         messages[#messages + 1] = ("|cffff6060%s is the unit menu, which cannot fire on press. Use |r|cffffff00/slotcast clicks up|r|cffff6060 if you need it.|r")
             :format(ns.ComboText(entry.combo))

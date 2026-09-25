@@ -796,6 +796,18 @@ function Probe.Check(forceChat, frameName)
         addf("       using %s instead.", tostring(ns.FrameVerb("menu")))
     end
 
+    -- 3b2. Which menu-opening APIs this client still has, since both secure
+    --      verbs are dead on 12.1 and any fix has to come from one of these.
+    section("MENU APIS")
+    for _, path in ipairs({
+        "UnitPopup_OpenMenu", "UnitPopup_ShowMenu", "UnitPopupManager",
+        "ToggleDropDownMenu", "MenuUtil", "C_ClickBindings.ExecuteBinding",
+        "C_ClickBindings.MakeModifiers", "Enum.ClickBindingInteraction",
+    }) do
+        ReportAPI(path)
+    end
+    addf("  menu bindable from an attribute: %s", tostring(ns.MenuSupported()))
+
     -- 3c. Blizzard's own click bindings, which run on their own path and could
     --     be claiming these combos before ours are consulted.
     section("BLIZZARD CLICK BINDINGS")

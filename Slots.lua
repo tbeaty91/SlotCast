@@ -325,6 +325,19 @@ function ns.WipeFrameVerbs()
     detectedVerbs = nil
 end
 
+-- Can this client open a unit menu from a secure attribute at all?
+--
+-- Two verbs exist and both are dead on 12.1: "menu" needs frame.menu, which no
+-- longer exists, and "togglemenu" is not handled either. Unit menus moved to
+-- C_ClickBindings, which an addon cannot invoke from an attribute. Rather than
+-- keep offering a binding that silently does nothing, say so.
+function ns.MenuSupported()
+    local sample = ns.Secure and ns.Secure.SampleFrame and ns.Secure.SampleFrame()
+    if not sample then return true end  -- unknown; do not cry wolf
+    local ok, menuFn = pcall(function() return sample.menu end)
+    return ok and type(menuFn) == "function"
+end
+
 ------------------------------------------------------------------------------
 -- which stroke bindings fire on
 --
