@@ -772,6 +772,44 @@ function Probe.Check(forceChat, frameName)
         end
     end
 
+    -- 3b. Who actually handles the click. "menu" is not a generic action type:
+    --     SecureUnitButton_OnClick special-cases it and calls frame.menu().
+    --     If this frame uses some other handler, or has no menu function, the
+    --     attribute is correct and still does nothing.
+    section("CLICK HANDLER")
+    for _, script in ipairs({ "OnClick", "PreClick", "PostClick", "OnMouseDown", "OnMouseUp" }) do
+        local ok, fn = pcall(frame.GetScript, frame, script)
+        if ok and fn then
+            local label = tostring(fn)
+            if fn == _G.SecureUnitButton_OnClick then label = label .. "  == SecureUnitButton_OnClick"
+            elseif fn == _G.SecureActionButton_OnClick then label = label .. "  == SecureActionButton_OnClick" end
+            addf("  %s = %s", script, label)
+        end
+    end
+    addf("  SecureUnitButton_OnClick exists: %s", tostring(type(_G.SecureUnitButton_OnClick)))
+    addf("  SecureActionButton_OnClick exists: %s", tostring(type(_G.SecureActionButton_OnClick)))
+
+    local okMenu, menuFn = pcall(function() return frame.menu end)
+    addf("  frame.menu = %s", okMenu and tostring(menuFn) or "unreadable")
+
+    -- 3c. Blizzard's own click bindings, which run on their own path and could
+    --     be claiming these combos before ours are consulted.
+    section("BLIZZARD CLICK BINDINGS")
+    if ns.Conflicts and ns.Conflicts.Available() then
+        local bindings = ns.Conflicts.GetBindings()
+        if bindings then
+            addf("  %d binding(s)", #bindings)
+            for _, b in ipairs(bindings) do
+                addf("    %s -> %s%s", b.text, b.action,
+                    (b.combo and ns.db.binds[b.combo] ~= nil) and "   [SlotCast also binds this]" or "")
+            end
+        else
+            add("  could not read them")
+        end
+    else
+        add("  C_ClickBindings not present")
+    end
+
     -- 4. The client's own modified-click hijacks.
     section("MODIFIED CLICKS")
     if type(_G.GetModifiedClick) == "function" then
