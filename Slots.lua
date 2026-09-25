@@ -276,6 +276,13 @@ local DEFAULT_VERBS = { target = "target", menu = "togglemenu" }
 local detectedVerbs
 
 function ns.FrameVerb(which)
+    -- Manual override, for when detection picks the wrong one on a client
+    -- nobody has seen. "auto" defers to the detection below.
+    if which == "menu" then
+        local override = ns.db and ns.db.menuVerb
+        if override == "menu" or override == "togglemenu" then return override end
+    end
+
     if detectedVerbs then return detectedVerbs[which] end
 
     local sample = ns.Secure and ns.Secure.SampleFrame and ns.Secure.SampleFrame()
@@ -286,9 +293,28 @@ function ns.FrameVerb(which)
     end
 
     local verbs = { target = DEFAULT_VERBS.target, menu = DEFAULT_VERBS.menu }
-    for attr, key in pairs({ ["*type1"] = "target", ["*type2"] = "menu" }) do
-        local ok, value = pcall(sample.GetAttribute, sample, attr)
-        if ok and type(value) == "string" and value ~= "" then verbs[key] = value end
+
+    local okTarget, targetVerb = pcall(sample.GetAttribute, sample, "*type1")
+    if okTarget and type(targetVerb) == "string" and targetVerb ~= "" then
+        verbs.target = targetVerb
+    end
+
+    -- "menu" is not a generic action type. SecureUnitButton_OnClick special-
+    -- cases it and calls frame.menu(); if that function does not exist the
+    -- click falls through to the generic handler, which has never heard of
+    -- "menu", and silently does nothing.
+    --
+    -- On 12.1 the frames still carry "*type2 = menu" but have no menu
+    -- function -- the real right-click menu comes from C_ClickBindings now.
+    -- So the attribute is not evidence; the function is.
+    local okMenuFn, menuFn = pcall(function() return sample.menu end)
+    local hasMenuFn = okMenuFn and type(menuFn) == "function"
+
+    local okMenu, menuVerb = pcall(sample.GetAttribute, sample, "*type2")
+    if hasMenuFn and okMenu and type(menuVerb) == "string" and menuVerb ~= "" then
+        verbs.menu = menuVerb
+    else
+        verbs.menu = "togglemenu"
     end
 
     detectedVerbs = verbs
@@ -346,25 +372,22 @@ end
 local SPECIAL_SPEC = {
     -- On the press stroke these become macros, which run on either stroke.
     -- Same effect, no loss of cast responsiveness elsewhere on the frame.
+    -- Always the macro form, on either stroke. The built-in "target" / "focus"
+    -- / "assist" action types are increasingly vestigial -- 12.1 frames still
+    -- advertise "*type1 = target" while the real targeting comes from
+    -- C_ClickBindings -- whereas a macro is plain script execution and cannot
+    -- quietly stop being supported. @mouseover is exactly right for a click
+    -- binding: the cursor is over the frame by definition.
     target = function()
-        if ns.FiresOnDown() then
-            return { type = "macro", key = "macrotext", value = "/target [@mouseover,exists]" }
-        end
-        return { type = ns.FrameVerb("target") }
+        return { type = "macro", key = "macrotext", value = "/target [@mouseover,exists]" }
     end,
 
     focus = function()
-        if ns.FiresOnDown() then
-            return { type = "macro", key = "macrotext", value = "/focus [@mouseover,exists]" }
-        end
-        return { type = "focus" }
+        return { type = "macro", key = "macrotext", value = "/focus [@mouseover,exists]" }
     end,
 
     assist = function()
-        if ns.FiresOnDown() then
-            return { type = "macro", key = "macrotext", value = "/assist [@mouseover,exists]" }
-        end
-        return { type = "assist" }
+        return { type = "macro", key = "macrotext", value = "/assist [@mouseover,exists]" }
     end,
 
     -- No macro command opens a unit menu, so this one has no press-stroke form.

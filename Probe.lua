@@ -791,6 +791,10 @@ function Probe.Check(forceChat, frameName)
 
     local okMenu, menuFn = pcall(function() return frame.menu end)
     addf("  frame.menu = %s", okMenu and tostring(menuFn) or "unreadable")
+    if okMenu and type(menuFn) ~= "function" then
+        add("    -> no menu function, so type=\"menu\" would do nothing here;")
+        addf("       using %s instead.", tostring(ns.FrameVerb("menu")))
+    end
 
     -- 3c. Blizzard's own click bindings, which run on their own path and could
     --     be claiming these combos before ours are consulted.

@@ -100,6 +100,11 @@ ns.defaults = {
     rankMode      = "slot",
     rankOverrides = {},
 
+    -- Which secure action type opens the unit menu. "auto" picks "menu" only
+    -- when the frame has a menu function for SecureUnitButton_OnClick to call,
+    -- and "togglemenu" otherwise. Override if a client wants the other one.
+    menuVerb = "auto",
+
     -- Which mouse stroke bindings fire on.
     --   "auto" (default) press, unless the unit menu is bound -- the one action
     --          with no press-stroke equivalent. Casting stays responsive.
@@ -390,6 +395,17 @@ function Dispatch(cmd, rest, restRaw)
             ns.Print("usage: |cffffff00/slotcast rank slot|r or |cffffff00/slotcast rank highest|r (current: %s)", ns.db.rankMode)
         end
 
+    elseif cmd == "menuverb" then
+        if rest == "auto" or rest == "menu" or rest == "togglemenu" then
+            ns.db.menuVerb = rest
+            ns.WipeFrameVerbs()
+            ns.Refresh(true)
+            ns.Print("menu verb: %s (using %s)", rest, ns.FrameVerb("menu"))
+        else
+            ns.Print("usage: |cffffff00/slotcast menuverb auto|menu|togglemenu|r (current: %s -> using %s)",
+                ns.db.menuVerb, ns.FrameVerb("menu"))
+        end
+
     elseif cmd == "clicks" then
         if rest == "auto" or rest == "up" or rest == "down" or rest == "both" then
             ns.db.clickStroke = rest
@@ -425,7 +441,7 @@ function Dispatch(cmd, rest, restRaw)
         ns.Refresh(true)
 
     else
-        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00clicks|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
+        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00clicks|r, |cffffff00menuverb|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
     end
 end
 
