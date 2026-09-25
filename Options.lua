@@ -678,6 +678,21 @@ function Options.RefreshDisplay()
     if empty then
         messages[#messages + 1] = "|cffffcc00This bar is empty. Enable it in Edit Mode and drag spells onto it, then hide or fade it.|r"
     end
+    -- The client's own self-cast / focus-cast modifiers hijack the unit before
+    -- any binding runs, so a collision looks exactly like a dead binding.
+    local conflicts = ns.ModifierConflicts and ns.ModifierConflicts() or {}
+    if #conflicts > 0 then
+        local seen, names = {}, {}
+        for _, c in ipairs(conflicts) do
+            if not seen[c.key] then
+                seen[c.key] = true
+                names[#names + 1] = ("%s is your %s key"):format(c.key, c.setting)
+            end
+        end
+        messages[#messages + 1] = ("|cffff6060%d binding(s) use a hijacked modifier (%s). Those clicks act on you, not the frame. Rebind, or change it in Options > Combat.|r")
+            :format(#conflicts, table.concat(names, ", "))
+    end
+
     if ns.IsRefreshPending() then
         messages[#messages + 1] = "|cffff8080Changes are waiting for you to leave combat.|r"
     end

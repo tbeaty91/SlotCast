@@ -652,3 +652,102 @@ function Probe.Show(forceChat)
     ns.Print("probe ready: %d lines. Ctrl+A then Ctrl+C in the window to copy.", lineCount)
     ns.Print("Also saved to SavedVariables as lastProbe, and |cffffff00/slotcast probe chat|r prints it here.")
 end
+
+------------------------------------------------------------------------------
+-- /slotcast check
+--
+-- Answers one question: did the binding land on the frame, and is anything
+-- intercepting it? Attribute readback separates "we never wrote it" from "we
+-- wrote it and something else ate the click" -- which are very different bugs
+-- with identical symptoms.
+------------------------------------------------------------------------------
+
+-- WoW's own modified-click settings hijack the unit before an action runs.
+-- SELFCAST defaults to ALT, which is exactly the modifier people reach for
+-- first when binding extra clicks.
+local MODIFIED_CLICKS = { "SELFCAST", "FOCUSCAST" }
+
+local MOD_NAME_TO_PREFIX = { ALT = "alt-", CTRL = "ctrl-", SHIFT = "shift-" }
+
+-- Returns { {combo, setting, key} } for bindings whose modifier collides.
+function ns.ModifierConflicts()
+    if type(_G.GetModifiedClick) ~= "function" then return {} end
+
+    local out = {}
+    for _, setting in ipairs(MODIFIED_CLICKS) do
+        local ok, key = pcall(GetModifiedClick, setting)
+        local prefix = ok and key and MOD_NAME_TO_PREFIX[key]
+        if prefix then
+            for combo in pairs(ns.db.binds) do
+                if combo:find(prefix, 1, true) then
+                    out[#out + 1] = { combo = combo, setting = setting, key = key }
+                end
+            end
+        end
+    end
+    return out
+end
+
+function Probe.Check()
+    local frame = ns.Secure and ns.Secure.SampleFrame and ns.Secure.SampleFrame()
+    if not frame then
+        ns.Warn("no unit frames are being managed - nothing to check.")
+        ns.Warn("Run |cffffff00/slotcast status|r; if it says 0 frames, discovery is the problem.")
+        return
+    end
+
+    local okName, name = pcall(frame.GetName, frame)
+    local okUnit, unit = pcall(frame.GetAttribute, frame, "unit")
+    ns.Print("checking |cffffffff%s|r (unit=%s)",
+        (okName and name) or "(unnamed)", okUnit and tostring(unit) or "?")
+
+    -- 1. Did every attribute we meant to write actually land?
+    local written, wrong = 0, 0
+    for _, entry in ipairs(ns.Slots.plan or {}) do
+        if entry.value ~= nil then
+            local ok, actual = pcall(frame.GetAttribute, frame, entry.attr)
+            if ok and actual == entry.value then
+                written = written + 1
+                ns.Print("  |cff00ff00ok|r   %s = %s", entry.attr, tostring(entry.value))
+            else
+                wrong = wrong + 1
+                ns.Print("  |cffff0000BAD|r  %s = %s (expected %s)",
+                    entry.attr, ok and tostring(actual) or "unreadable", tostring(entry.value))
+            end
+        end
+    end
+    ns.Print("%d attribute(s) correct, %d wrong.", written, wrong)
+
+    if wrong == 0 and written > 0 then
+        ns.Print("Bindings ARE on the frame. If a click still does nothing,")
+        ns.Print("something is intercepting it rather than the write failing.")
+    end
+
+    -- 2. The client's own modified-click hijacks.
+    if type(_G.GetModifiedClick) == "function" then
+        local parts = {}
+        for _, setting in ipairs(MODIFIED_CLICKS) do
+            local ok, key = pcall(GetModifiedClick, setting)
+            parts[#parts + 1] = ("%s=%s"):format(setting, ok and tostring(key) or "?")
+        end
+        ns.Print("modified clicks: %s", table.concat(parts, "  "))
+    end
+
+    for _, attr in ipairs({ "checkselfcast", "checkfocuscast" }) do
+        local ok, value = pcall(frame.GetAttribute, frame, attr)
+        ns.Print("  frame [%s] = %s", attr, ok and tostring(value) or "?")
+    end
+
+    local conflicts = ns.ModifierConflicts()
+    if #conflicts > 0 then
+        ns.Warn("MODIFIER CONFLICT:")
+        for _, c in ipairs(conflicts) do
+            ns.Warn("  %s uses %s, which is your %s key.",
+                ns.ComboText(c.combo), c.key, c.setting)
+        end
+        ns.Warn("That modifier redirects the unit before the action runs, so those")
+        ns.Warn("clicks act on you (or your focus) instead of the frame you clicked.")
+        ns.Warn("Fix: rebind to a different modifier, or change the key in")
+        ns.Warn("Options > Combat > Self Cast Key / Focus Cast Key.")
+    end
+end

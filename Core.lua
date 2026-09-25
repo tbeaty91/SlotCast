@@ -345,6 +345,9 @@ function Dispatch(cmd, rest)
 
         if ns.Slots then ns.Slots.PrintPlan() end
 
+    elseif cmd == "check" then
+        if Need("Probe") then ns.Probe.Check() end
+
     elseif cmd == "probe" then
         if Need("Probe") then ns.Probe.Show(rest == "chat") end
 
@@ -383,7 +386,7 @@ function Dispatch(cmd, rest)
         ns.Refresh(true)
 
     else
-        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
+        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
     end
 end
 
