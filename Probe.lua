@@ -723,7 +723,34 @@ function Probe.Check()
         ns.Print("something is intercepting it rather than the write failing.")
     end
 
-    -- 2. The client's own modified-click hijacks.
+    -- 2. Every type/unit attribute actually on the frame for buttons 1 and 2,
+    --    ours and Blizzard's alike. This is ground truth: it shows what the
+    --    secure lookup will find, without trusting our own bookkeeping.
+    ns.Print("raw attributes on the frame (buttons 1 and 2):")
+    for _, prefix in ipairs({ "", "alt-", "ctrl-", "shift-", "alt-ctrl-", "alt-shift-", "ctrl-shift-", "alt-ctrl-shift-", "*" }) do
+        for button = 1, 2 do
+            for _, attr in ipairs({ "type", "unit" }) do
+                local name = prefix .. attr .. button
+                local ok, value = pcall(frame.GetAttribute, frame, name)
+                if ok and value ~= nil then
+                    ns.Print("    %s = %s", name, tostring(value))
+                end
+            end
+        end
+    end
+
+    -- 3. What the config actually holds, in case the problem is upstream of
+    --    the secure layer entirely.
+    ns.Print("configured bindings:")
+    local any = false
+    for combo, value in pairs(ns.db.binds) do
+        ns.Print("    [%s] %s -> %s", combo, ns.ComboText(combo),
+            type(value) == "number" and ("slot " .. value) or tostring(value))
+        any = true
+    end
+    if not any then ns.Print("    (none)") end
+
+    -- 4. The client's own modified-click hijacks.
     if type(_G.GetModifiedClick) == "function" then
         local parts = {}
         for _, setting in ipairs(MODIFIED_CLICKS) do
