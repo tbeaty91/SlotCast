@@ -20,7 +20,7 @@ local panel, category, standalone, settingsHost
 local barButtons, specialRows, slotRows = {}, {}, {}
 local warningText, conflictText, slotHeader, rankDefaultLabel
 local gridCache, gridIs2D
-local gridAxisLabel, gridOrderButton, previewHeader
+local gridAxisLabel, gridOrderButton, previewHeader, previewTipBg, previewTipEdge
 local blizzDelegateButton
 local rankDefaultButtons = {}
 
@@ -756,6 +756,18 @@ local function BuildPanel()
     -- what it worked out, so the mapping is never a surprise.
     -- Tips and warnings first, then what the grid currently means, then the
     -- grid itself. Reading downwards should answer "why" before "what".
+    -- A tinted panel behind the header, so a recommendation reads as one
+    -- rather than blending into the surrounding explanatory text.
+    previewTipBg = panel:CreateTexture(nil, "BACKGROUND")
+    previewTipBg:SetPoint("TOPLEFT", RIGHT_X - 6, -478)
+    previewTipBg:SetSize(COL_W + 12, 42)
+    previewTipBg:Hide()
+
+    previewTipEdge = panel:CreateTexture(nil, "BORDER")
+    previewTipEdge:SetPoint("TOPLEFT", RIGHT_X - 6, -478)
+    previewTipEdge:SetSize(3, 42)
+    previewTipEdge:Hide()
+
     previewHeader = Label(panel, "", "GameFontHighlightSmall")
     previewHeader:SetPoint("TOPLEFT", RIGHT_X, -484)
     previewHeader:SetWidth(COL_W)
@@ -930,16 +942,28 @@ function Options.RefreshDisplay()
     -- made for the old shape no longer describes the new one. Say so rather
     -- than letting it look like the bindings scrambled themselves.
     local shape = grid and ("%dx%d"):format(gridCols, gridRows) or nil
+    local function Highlight(r, g, b)
+        previewTipBg:SetColorTexture(r, g, b, 0.12)
+        previewTipEdge:SetColorTexture(r, g, b, 0.9)
+        previewTipBg:Show()
+        previewTipEdge:Show()
+    end
+
+    previewTipBg:Hide()
+    previewTipEdge:Hide()
+
     if not grid then
         previewHeader:SetText("|cff808080Bar layout not readable.|r")
     elseif ns.db.lastMappedShape and shape ~= ns.db.lastMappedShape then
-        previewHeader:SetText(("|cffff8080Bar was %s when mapped, now %s - press Map grid to clicks again.|r")
+        Highlight(1, 0.3, 0.3)
+        previewHeader:SetText(("|cffff6060This bar was %s when you mapped it and is now %s.|r\n|cffffffffPress Map grid to clicks again.|r")
             :format(ns.db.lastMappedShape, shape))
     elseif gridCols > gridRows then
         -- A bar wider than it is tall puts the mouse buttons on the rows, so
-        -- Left / Middle / Right run downwards. It works, but it reads badly
+        -- Left / Middle / Right run downwards. It works, and it reads badly
         -- against a mouse, which is laid out left to right.
-        previewHeader:SetText("|cffffcc00Tip: set this bar to Vertical in Edit Mode. Left / Middle / Right then run across, with modifiers down.|r")
+        Highlight(1, 0.82, 0)
+        previewHeader:SetText("|cffffcc00Heads up - this bar is horizontal.|r\n|cffffffffThe grid works best Vertical, 3 columns wide: Left / Middle / Right across the top, modifiers down.|r")
     else
         previewHeader:SetText("|cffa0a0a0Your bar, and the click each slot gets:|r")
     end
