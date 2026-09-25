@@ -357,7 +357,7 @@ function Dispatch(cmd, rest)
         if ns.Slots then ns.Slots.PrintPlan() end
 
     elseif cmd == "check" then
-        if Need("Probe") then ns.Probe.Check() end
+        if Need("Probe") then ns.Probe.Check(rest == "chat") end
 
     elseif cmd == "probe" then
         if Need("Probe") then ns.Probe.Show(rest == "chat") end

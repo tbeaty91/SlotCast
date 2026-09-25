@@ -550,7 +550,8 @@ local function BuildWindow()
 
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", 12, -10)
-    title:SetText("SlotCast probe")
+    title:SetText("SlotCast")
+    f.title = title
 
     local hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hint:SetPoint("TOPLEFT", 12, -28)
@@ -604,37 +605,29 @@ local function BuildWindow()
 end
 
 local function PrintToChat(text)
-    ns.Print("probe follows. Widen the chat frame, then drag-select it, or read")
+    ns.Print("report follows. Widen the chat frame, then drag-select it, or read")
     ns.Print("it from WTF/Account/<account>/SavedVariables/SlotCast.lua after /reload.")
     for line in text:gmatch("[^\n]*") do
         if line ~= "" then print(line) end
     end
 end
 
--- `forceChat` is /slotcast probe chat.
-function Probe.Show(forceChat)
-    local ok, text = pcall(Probe.Build)
-    if not ok then
-        ns.Warn("probe failed while collecting data: %s", tostring(text))
-        return
-    end
-
-    -- Stash it where it survives a /reload regardless of what the window does:
-    -- WTF/Account/<account>/SavedVariables/SlotCast.lua
-    ns.db.lastProbe = text
+-- One window, shared by every report. `stashKey` is where the text is kept in
+-- saved variables so it survives a /reload regardless of what the window does.
+local function Display(text, stashKey, forceChat)
+    ns.db[stashKey] = text
 
     local lineCount = select(2, text:gsub("\n", "\n")) + 1
 
     if forceChat then
         PrintToChat(text)
-        ns.Print("probe: %d lines, also saved as lastProbe.", lineCount)
+        ns.Print("%d lines, also saved as %s.", lineCount, stashKey)
         return
     end
 
-    -- The window is built from plain frames, but if it fails on this client the
-    -- report still has to reach the user somehow.
     local built, err = pcall(function()
         window = window or BuildWindow()
+        window.title:SetText(stashKey == "lastCheck" and "SlotCast check" or "SlotCast probe")
         window.reportText = text
         window.edit:SetText(text)
         window:Show()
@@ -645,26 +638,22 @@ function Probe.Show(forceChat)
     if not built then
         ns.Warn("could not open the copy window (%s) - falling back to chat.", tostring(err))
         PrintToChat(text)
-        ns.Print("probe: %d lines, also saved as lastProbe.", lineCount)
         return
     end
 
-    ns.Print("probe ready: %d lines. Ctrl+A then Ctrl+C in the window to copy.", lineCount)
-    ns.Print("Also saved to SavedVariables as lastProbe, and |cffffff00/slotcast probe chat|r prints it here.")
+    ns.Print("%d lines. Ctrl+A then Ctrl+C in the window to copy, or add |cffffff00chat|r to print here.", lineCount)
 end
 
-------------------------------------------------------------------------------
--- /slotcast check
---
--- Answers one question: did the binding land on the frame, and is anything
--- intercepting it? Attribute readback separates "we never wrote it" from "we
--- wrote it and something else ate the click" -- which are very different bugs
--- with identical symptoms.
-------------------------------------------------------------------------------
+-- `forceChat` is the "chat" argument on either command.
+function Probe.Show(forceChat)
+    local ok, text = pcall(Probe.Build)
+    if not ok then
+        ns.Warn("probe failed while collecting data: %s", tostring(text))
+        return
+    end
+    Display(text, "lastProbe", forceChat)
+end
 
--- WoW's own modified-click settings hijack the unit before an action runs.
--- SELFCAST defaults to ALT, which is exactly the modifier people reach for
--- first when binding extra clicks.
 local MODIFIED_CLICKS = { "SELFCAST", "FOCUSCAST" }
 
 local MOD_NAME_TO_PREFIX = { ALT = "alt-", CTRL = "ctrl-", SHIFT = "shift-" }
@@ -688,7 +677,10 @@ function ns.ModifierConflicts()
     return out
 end
 
-function Probe.Check()
+function Probe.Check(forceChat)
+    lines = {}
+    addf("=== SlotCast check (addon %s) ===", ns.SlotCast.version)
+
     local frame = ns.Secure and ns.Secure.SampleFrame and ns.Secure.SampleFrame()
     if not frame then
         ns.Warn("no unit frames are being managed - nothing to check.")
@@ -698,88 +690,85 @@ function Probe.Check()
 
     local okName, name = pcall(frame.GetName, frame)
     local okUnit, unit = pcall(frame.GetAttribute, frame, "unit")
-    ns.Print("checking |cffffffff%s|r (unit=%s)",
-        (okName and name) or "(unnamed)", okUnit and tostring(unit) or "?")
+    addf("frame: %s   unit=%s", (okName and name) or "(unnamed)", okUnit and tostring(unit) or "?")
+    addf("click stroke: %s -> firing on %s", ns.db.clickStroke, ns.ClickStroke())
+    addf("frame verbs: target=%s menu=%s",
+        tostring(ns.FrameVerb("target")), tostring(ns.FrameVerb("menu")))
 
-    -- 1. Did every attribute we meant to write actually land?
+    -- 1. What the config actually holds. If a binding is missing here, the bug
+    --    is in the options UI and the secure layer is innocent.
+    section("CONFIGURED BINDINGS")
+    local any = false
+    for combo, value in pairs(ns.db.binds) do
+        addf("  [%s] %s -> %s", combo, ns.ComboText(combo),
+            type(value) == "number" and ("slot " .. value) or tostring(value))
+        any = true
+    end
+    if not any then add("  (none)") end
+
+    -- 2. Did every attribute we meant to write actually land?
+    section("PLANNED ATTRIBUTES vs FRAME")
     local written, wrong = 0, 0
     for _, entry in ipairs(ns.Slots.plan or {}) do
         if entry.value ~= nil then
             local ok, actual = pcall(frame.GetAttribute, frame, entry.attr)
             if ok and actual == entry.value then
                 written = written + 1
-                ns.Print("  |cff00ff00ok|r   %s = %s", entry.attr, tostring(entry.value))
+                addf("  ok   %s = %s", entry.attr, tostring(entry.value))
             else
                 wrong = wrong + 1
-                ns.Print("  |cffff0000BAD|r  %s = %s (expected %s)",
+                addf("  BAD  %s = %s (expected %s)",
                     entry.attr, ok and tostring(actual) or "unreadable", tostring(entry.value))
             end
         end
     end
-    ns.Print("%d attribute(s) correct, %d wrong.", written, wrong)
-
+    addf("  -> %d correct, %d wrong", written, wrong)
     if wrong == 0 and written > 0 then
-        ns.Print("Bindings ARE on the frame. If a click still does nothing,")
-        ns.Print("something is intercepting it rather than the write failing.")
+        add("  Bindings ARE on the frame; if a click does nothing, something is")
+        add("  intercepting it rather than the write failing.")
     end
 
-    -- 2. Every type/unit attribute actually on the frame for buttons 1 and 2,
-    --    ours and Blizzard's alike. This is ground truth: it shows what the
-    --    secure lookup will find, without trusting our own bookkeeping.
-    ns.Print("raw attributes on the frame (buttons 1 and 2):")
-    for _, prefix in ipairs({ "", "alt-", "ctrl-", "shift-", "alt-ctrl-", "alt-shift-", "ctrl-shift-", "alt-ctrl-shift-", "*" }) do
+    -- 3. Ground truth: every type/unit attribute on the frame for buttons 1
+    --    and 2, ours and Blizzard's alike, including the wildcard forms.
+    section("RAW FRAME ATTRIBUTES (buttons 1 and 2)")
+    for _, prefix in ipairs({ "", "alt-", "ctrl-", "shift-", "alt-ctrl-", "alt-shift-",
+                              "ctrl-shift-", "alt-ctrl-shift-", "*" }) do
         for button = 1, 2 do
             for _, attr in ipairs({ "type", "unit" }) do
-                local name = prefix .. attr .. button
-                local ok, value = pcall(frame.GetAttribute, frame, name)
+                local attrName = prefix .. attr .. button
+                local ok, value = pcall(frame.GetAttribute, frame, attrName)
                 if ok and value ~= nil then
-                    ns.Print("    %s = %s", name, tostring(value))
+                    addf("  %s = %s", attrName, tostring(value))
                 end
             end
         end
     end
 
-    -- 3. What the config actually holds, in case the problem is upstream of
-    --    the secure layer entirely.
-    ns.Print("configured bindings:")
-    local any = false
-    for combo, value in pairs(ns.db.binds) do
-        ns.Print("    [%s] %s -> %s", combo, ns.ComboText(combo),
-            type(value) == "number" and ("slot " .. value) or tostring(value))
-        any = true
-    end
-    if not any then ns.Print("    (none)") end
-
     -- 4. The client's own modified-click hijacks.
+    section("MODIFIED CLICKS")
     if type(_G.GetModifiedClick) == "function" then
-        local parts = {}
         for _, setting in ipairs(MODIFIED_CLICKS) do
             local ok, key = pcall(GetModifiedClick, setting)
-            parts[#parts + 1] = ("%s=%s"):format(setting, ok and tostring(key) or "?")
+            addf("  %s = %s", setting, ok and tostring(key) or "?")
         end
-        ns.Print("modified clicks: %s", table.concat(parts, "  "))
+    else
+        add("  GetModifiedClick is not available")
     end
-
-    ns.Print("click stroke: %s -> firing on |cffffffff%s|r", ns.db.clickStroke, ns.ClickStroke())
-    for _, entry in ipairs(ns.StrandedBindings()) do
-        ns.Warn("  %s is the unit menu and cannot fire on press.", ns.ComboText(entry.combo))
-    end
-
     for _, attr in ipairs({ "checkselfcast", "checkfocuscast" }) do
         local ok, value = pcall(frame.GetAttribute, frame, attr)
-        ns.Print("  frame [%s] = %s", attr, ok and tostring(value) or "?")
+        addf("  frame [%s] = %s", attr, ok and tostring(value) or "?")
     end
 
-    local conflicts = ns.ModifierConflicts()
-    if #conflicts > 0 then
-        ns.Warn("MODIFIER CONFLICT:")
-        for _, c in ipairs(conflicts) do
-            ns.Warn("  %s uses %s, which is your %s key.",
-                ns.ComboText(c.combo), c.key, c.setting)
-        end
-        ns.Warn("That modifier redirects the unit before the action runs, so those")
-        ns.Warn("clicks act on you (or your focus) instead of the frame you clicked.")
-        ns.Warn("Fix: rebind to a different modifier, or change the key in")
-        ns.Warn("Options > Combat > Self Cast Key / Focus Cast Key.")
+    for _, c in ipairs(ns.ModifierConflicts()) do
+        addf("  CONFLICT: %s uses %s, which is your %s key.",
+            ns.ComboText(c.combo), c.key, c.setting)
     end
+    for _, entry in ipairs(ns.StrandedBindings()) do
+        addf("  STRANDED: %s is the unit menu and cannot fire on press.", ns.ComboText(entry.combo))
+    end
+
+    add("")
+    add("=== end of check ===")
+
+    Display(table.concat(lines, "\n"), "lastCheck", forceChat)
 end

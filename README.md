@@ -210,7 +210,10 @@ string for every binding, so you can see what's being sent.
 ```
 
 opens a copyable window (Ctrl+A, Ctrl+C) with everything about the client that
-can't be determined from outside the game: build and project constants, which
+can't be determined from outside the game. `/slotcast check` uses the same window
+for a shorter, binding-focused report; both accept a `chat` argument to print to
+chat instead, and both are stashed in saved variables (`lastProbe`, `lastCheck`)
+so they survive a `/reload`: build and project constants, which
 action bars exist and which slots they drive, the full spell API surface and what
 it says about the spells on your bar, whether `ClickCastFrames` exists and what's
 in it, a real unit frame's secure attributes, and Blizzard's click-binding
@@ -309,6 +312,7 @@ the full list.
 | `/slotcast castmode spell\|macro` | how casts are emitted; switch if ranked casts don't fire |
 | `/slotcast clicks auto\|up\|down\|both` | which mouse stroke bindings fire on |
 | `/slotcast check` | read bindings back off a live frame; proves whether they landed |
+| `/slotcast check chat` | same, printed to chat instead of the copy window |
 | `/slotcast conflicts` | list Blizzard's click bindings and any overlap |
 | `/slotcast dump` | raw `C_ClickBindings.GetProfileInfo()` output |
 | `/slotcast toggle` | enable/disable without unloading |
