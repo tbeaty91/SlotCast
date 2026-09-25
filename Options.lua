@@ -12,7 +12,7 @@ local Options = ns.Options
 local ROW_H    = 24
 local COL_W    = 300
 local CONTENT_W = 652
-local CONTENT_H = 512
+local CONTENT_H = 544
 local LEFT_X   = 16
 local RIGHT_X  = 336
 
@@ -21,6 +21,7 @@ local barButtons, specialRows, slotRows = {}, {}, {}
 local warningText, conflictText, slotHeader, rankDefaultLabel
 local gridCache, gridIs2D
 local gridAxisButton, gridOrderButton
+local blizzDelegateButton
 local rankDefaultButtons = {}
 
 ------------------------------------------------------------------------------
@@ -231,7 +232,11 @@ local function CreateRow(parent, hasIcon)
     row.capture:SetScript("OnClick", function(self, mouseButton)
         local button = ns.ButtonNumber(mouseButton)
         if not button then return end
-        Assign(row.target, ns.MakeCombo(button, IsAltKeyDown(), IsControlKeyDown(), IsShiftKeyDown()))
+        local combo = ns.MakeCombo(button, IsAltKeyDown(), IsControlKeyDown(), IsShiftKeyDown())
+        -- The keys are still held right now, which is the only moment the
+        -- client will tell us its own modifier bitfield.
+        ns.RecordModifierBits(combo)
+        Assign(row.target, combo)
     end)
     row.capture:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -439,8 +444,33 @@ local function BuildPanel()
         Options.RefreshDisplay()
     end)
 
+    blizzDelegateButton = PushButton(panel, COL_W, 22, "")
+    blizzDelegateButton:SetPoint("TOPLEFT", LEFT_X, -472)
+    blizzDelegateButton:SetScript("OnClick", function()
+        local order = { off = "menu", menu = "both", both = "off" }
+        ns.db.blizzDelegate = order[ns.db.blizzDelegate] or "menu"
+        ns.Refresh(true)
+        local ok, message, missing = ns.Conflicts.SyncDelegated()
+        if message then ns.Print("%s", message) end
+        if not ok then ns.Warn("could not update Blizzard's bindings: %s", tostring(message)) end
+        for _, combo in ipairs(missing or {}) do
+            ns.Warn("%s needs re-binding once so its modifier can be captured.", ns.ComboText(combo))
+        end
+        Options.RefreshDisplay()
+    end)
+    blizzDelegateButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Let Blizzard handle these clicks")
+        GameTooltip:AddLine("Unit menus (and targeting) moved to Blizzard's click bindings, which add-ons cannot drive from a secure attribute - but can write to.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("SlotCast writes the binding into their profile and stops binding that click itself.", 0.5, 0.8, 1, true)
+        GameTooltip:AddLine("Your other click bindings are preserved.", 1, 0.6, 0.2, true)
+        GameTooltip:Show()
+    end)
+    blizzDelegateButton:SetScript("OnLeave", GameTooltip_Hide)
+
     local clearMine = PushButton(panel, COL_W, 22, "Clear all SlotCast bindings")
-    clearMine:SetPoint("TOPLEFT", LEFT_X, -472)
+    clearMine:SetPoint("TOPLEFT", LEFT_X, -500)
     clearMine:SetScript("OnClick", function()
         wipe(ns.db.binds)
         ns.Refresh(true)
@@ -629,6 +659,15 @@ function Options.RefreshDisplay()
         barButtons[i].sel:SetShown(ns.db.bar == i)
     end
 
+    local delegateLabel = {
+        off  = "Blizzard handles: nothing",
+        menu = "Blizzard handles: unit menu",
+        both = "Blizzard handles: menu + target",
+    }
+    blizzDelegateButton:SetText(delegateLabel[ns.db.blizzDelegate] or delegateLabel.off)
+    blizzDelegateButton:SetEnabled(ns.Conflicts.Available())
+    blizzDelegateButton:SetAlpha(ns.Conflicts.Available() and 1 or 0.35)
+
     slotHeader:SetText(ns.BAR_NAMES[ns.db.bar] or ("Bar " .. ns.db.bar))
 
     local grid, gridRows, gridCols = ns.Slots.GridLayout()
@@ -699,7 +738,7 @@ function Options.RefreshDisplay()
     if ns.MenuSupported and not ns.MenuSupported() then
         for combo, value in pairs(ns.db.binds) do
             if value == "menu" then
-                messages[#messages + 1] = ("|cffff6060%s cannot open a unit menu on this client - it moved to Blizzard's Click Bindings, which add-ons can't drive. Unbind it and set it in Options > Click Bindings instead; SlotCast leaves clicks it doesn't bind alone.|r")
+                messages[#messages + 1] = ("|cffff6060%s cannot open a unit menu as a normal binding on this client. Press |r|cffffff00Blizzard handles: unit menu|r|cffff6060 below to hand it to the system that still owns it.|r")
                     :format(ns.ComboText(combo))
             end
         end

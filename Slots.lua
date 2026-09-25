@@ -331,6 +331,47 @@ end
 -- longer exists, and "togglemenu" is not handled either. Unit menus moved to
 -- C_ClickBindings, which an addon cannot invoke from an attribute. Rather than
 -- keep offering a binding that silently does nothing, say so.
+------------------------------------------------------------------------------
+-- delegating to Blizzard's click bindings
+--
+-- Unit menus (and targeting) moved to C_ClickBindings, which an addon cannot
+-- drive from a secure attribute -- but it CAN be written to. So for those two
+-- actions, hand the click to Blizzard's system and make sure SlotCast writes
+-- nothing for it: our specific attribute would otherwise override the wildcard
+-- one their binding produces.
+------------------------------------------------------------------------------
+
+local DELEGATABLE = { menu = true, target = true }
+
+function ns.IsDelegated(value)
+    if type(value) ~= "string" or not DELEGATABLE[value] then return false end
+
+    local mode = (ns.db and ns.db.blizzDelegate) or "off"
+    if mode == "off" then return false end
+    if not (ns.Conflicts and ns.Conflicts.Available()) then return false end
+
+    if mode == "both" then return true end
+    return mode == "menu" and value == "menu"
+end
+
+-- The modifier bitfield's encoding is undocumented, so do not reconstruct it:
+-- capture it from the client at the moment the user holds the keys.
+function ns.RecordModifierBits(combo)
+    local api = _G.C_ClickBindings
+    if not api or type(api.MakeModifiers) ~= "function" then return end
+    local ok, bits = pcall(api.MakeModifiers)
+    if ok and type(bits) == "number" then
+        ns.db.modifierBits = ns.db.modifierBits or {}
+        ns.db.modifierBits[combo] = bits
+    end
+end
+
+function ns.ModifierBitsFor(combo)
+    local prefix = ns.SplitCombo(combo)
+    if prefix == "" then return 0 end  -- no modifiers needs no capture
+    return ns.db.modifierBits and ns.db.modifierBits[combo]
+end
+
 function ns.MenuSupported()
     local sample = ns.Secure and ns.Secure.SampleFrame and ns.Secure.SampleFrame()
     if not sample then return true end  -- unknown; do not cry wolf
@@ -684,7 +725,11 @@ function Slots.BuildPlan()
         for combo, value in pairs(ns.db.binds) do
             local prefix, button = ns.SplitCombo(combo)
             if button then
-                local spec = Slots.ResolveBind(value)
+                -- A delegated click is Blizzard's. Write nils rather than
+                -- skipping, so any attribute we set previously is cleared --
+                -- a leftover would override their binding and look like this
+                -- feature simply not working.
+                local spec = not ns.IsDelegated(value) and Slots.ResolveBind(value) or nil
                 local live = spec and not spec.unsupported and spec.type
 
                 put(prefix .. "type" .. button, live or nil)

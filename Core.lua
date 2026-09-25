@@ -100,6 +100,13 @@ ns.defaults = {
     rankMode      = "slot",
     rankOverrides = {},
 
+    -- Hand Target / Unit menu to Blizzard's own click bindings instead of
+    -- binding them ourselves. "menu" covers the one that cannot work as an
+    -- attribute on current clients; "both" also gives them targeting.
+    blizzDelegate = "off",
+    modifierBits  = {},   -- combo -> the client's own modifier bitfield
+    blizzWritten  = {},   -- what we last wrote into their profile
+
     -- Which secure action type opens the unit menu. "auto" picks "menu" only
     -- when the frame has a menu function for SecureUnitButton_OnClick to call,
     -- and "togglemenu" otherwise. Override if a client wants the other one.
@@ -174,6 +181,12 @@ local function DoRefresh()
     refreshPending = false
     ns.Slots.BuildPlan()
     ns.Secure.ApplyAll()
+
+    -- Idempotent: only touches Blizzard's profile when what we want differs
+    -- from what we last wrote.
+    if ns.db.blizzDelegate ~= "off" and ns.Conflicts then
+        pcall(ns.Conflicts.SyncDelegated)
+    end
     if ns.Options and ns.Options.RefreshDisplay then ns.Options.RefreshDisplay() end
 end
 
@@ -395,6 +408,21 @@ function Dispatch(cmd, rest, restRaw)
             ns.Print("usage: |cffffff00/slotcast rank slot|r or |cffffff00/slotcast rank highest|r (current: %s)", ns.db.rankMode)
         end
 
+    elseif cmd == "blizz" then
+        if rest == "off" or rest == "menu" or rest == "both" then
+            ns.db.blizzDelegate = rest
+            ns.Refresh(true)
+            local ok, message, missing = ns.Conflicts.SyncDelegated()
+            if message then ns.Print("%s", message) end
+            if not ok then ns.Warn("could not update Blizzard's bindings: %s", tostring(message)) end
+            for _, combo in ipairs(missing or {}) do
+                ns.Warn("%s needs re-binding once so its modifier can be captured.", ns.ComboText(combo))
+            end
+        else
+            ns.Print("usage: |cffffff00/slotcast blizz off|menu|both|r (current: %s)", ns.db.blizzDelegate)
+            ns.Print("Hands Target / Unit menu to Blizzard's click bindings, which still own them.")
+        end
+
     elseif cmd == "menuverb" then
         if rest == "auto" or rest == "menu" or rest == "togglemenu" then
             ns.db.menuVerb = rest
@@ -441,7 +469,7 @@ function Dispatch(cmd, rest, restRaw)
         ns.Refresh(true)
 
     else
-        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00clicks|r, |cffffff00menuverb|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
+        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00clicks|r, |cffffff00menuverb|r, |cffffff00blizz|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
     end
 end
 
