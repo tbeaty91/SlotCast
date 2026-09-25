@@ -12,7 +12,7 @@ local Options = ns.Options
 local ROW_H    = 24
 local COL_W    = 300
 local CONTENT_W = 652
-local CONTENT_H = 696
+local CONTENT_H = 710
 local LEFT_X   = 16
 local RIGHT_X  = 336
 
@@ -350,6 +350,7 @@ local function ShortCombo(combo)
 end
 
 local previewCells, previewFrame = {}, nil
+local extraBoxes = {}
 
 local function PreviewCell(index)
     if previewCells[index] then return previewCells[index] end
@@ -679,6 +680,46 @@ local function BuildPanel()
 
     local clearMine = PushButton(panel, COL_W, 22, "Clear all SlotCast bindings")
     clearMine:SetPoint("TOPLEFT", LEFT_X, -568)
+
+    -- extras -----------------------------------------------------------------
+    local extrasHeader = Label(panel, "Extras", "GameFontNormal")
+    extrasHeader:SetPoint("TOPLEFT", LEFT_X, -602)
+
+    local extras = {
+        {
+            key = "showBarLabels",
+            text = "Show clicks on the action bar",
+            tip  = "Draws each slot's click (L, S-L, A-M) on the button itself, so the bar is its own reference card.",
+        },
+        {
+            key = "skipEnemyFrames",
+            text = "Skip target, focus, boss and arena frames",
+            tip  = "Those frames usually hold something hostile, where a heal burns a click and sometimes a global cooldown. Party, raid, player and pet frames stay bound.",
+        },
+        {
+            key = "stopCastingFix",
+            text = "Stop your current cast first",
+            tip  = "Without this, clicking while already casting does nothing - the click is swallowed. With it, the new cast interrupts the old one.\n\nSpells are sent as macros when this is on, so they act on the frame under your cursor.",
+        },
+    }
+
+    for i, extra in ipairs(extras) do
+        local box = CheckBox(panel, extra.text)
+        box:SetPoint("TOPLEFT", LEFT_X, -624 - (i - 1) * 24)
+        box:SetScript("OnClick", function(self)
+            ns.db[extra.key] = not ns.db[extra.key]
+            self:SetChecked(ns.db[extra.key])
+            ns.Refresh(true)
+        end)
+        box:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(extra.text)
+            GameTooltip:AddLine(extra.tip, 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        box:SetScript("OnLeave", GameTooltip_Hide)
+        extraBoxes[i] = { box = box, key = extra.key }
+    end
     clearMine:SetScript("OnClick", function()
         wipe(ns.db.binds)
         ns.Refresh(true)
@@ -894,6 +935,10 @@ function Options.RefreshDisplay()
     if not panel or not ns.db then return end
 
     panel.enable:SetChecked(ns.db.enabled)
+
+    for _, entry in ipairs(extraBoxes) do
+        entry.box:SetChecked(ns.db[entry.key])
+    end
 
     for i = 1, 8 do
         local exists = ns.Slots.BarExists(i)

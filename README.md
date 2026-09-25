@@ -127,6 +127,16 @@ matching every keybinding UI in the game.
 It replaces slot bindings only; target, menu and the other unit-frame actions are
 a separate decision and are left alone.
 
+## Extras
+
+Three optional behaviours, all off-by-default except the first:
+
+| | |
+|---|---|
+| **Show clicks on the action bar** | Draws each slot's binding (`L`, `S-L`, `A-M`) on the button itself. The bar becomes its own reference card — no memorising which cell is which click. Purely decorative; no secure code involved. |
+| **Skip target, focus, boss and arena frames** | Those usually hold something hostile, where a heal burns a click and sometimes a global cooldown. Party, raid, player and pet frames stay bound. Turning it on restores those frames immediately rather than at the next reload. |
+| **Stop your current cast first** | Without it, clicking while already casting does nothing — the click is swallowed. With it, the new cast interrupts the old one, which is the difference between a fast triage swap and a dead click. Forces the macro form, so spells act on the frame under the cursor. |
+
 ## Press or release
 
 `RegisterForClicks` is per *frame*, not per binding, so the whole frame commits

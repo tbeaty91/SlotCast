@@ -43,6 +43,10 @@ local BAR_BUTTON = {
     [8] = "MultiBar7Button",
 }
 
+function ns.BarButtonPrefix(bar)
+    return BAR_BUTTON[bar]
+end
+
 -- Ask bar `bar`'s first button which action slot it is currently driving.
 -- Returns nil if that bar does not exist on this client.
 local function ProbeBase(bar)
@@ -560,6 +564,26 @@ function ns.WipeRankCache()
     wipe(rankFormCache)
 end
 
+local SHORT_BUTTON = { [1] = "L", [2] = "R", [3] = "M", [4] = "4", [5] = "5" }
+
+-- "alt-shift-1" -> "AS-L", for drawing on an action button.
+function ns.ShortCombo(combo)
+    if not combo then return "" end
+    local prefix, button = ns.SplitCombo(combo)
+    local mods = ""
+    if prefix:find("alt-")   then mods = mods .. "A" end
+    if prefix:find("ctrl-")  then mods = mods .. "C" end
+    if prefix:find("shift-") then mods = mods .. "S" end
+    return (mods ~= "" and (mods .. "-") or "") .. (SHORT_BUTTON[button] or tostring(button))
+end
+
+-- Which combo, if any, is bound to this slot index.
+function ns.ComboForSlot(index)
+    for combo, value in pairs(ns.db.binds) do
+        if value == index then return combo end
+    end
+end
+
 -- "Rank 2" -> "R2", for the cramped options row.
 function ns.ShortRank(rank)
     local n = rank and rank:match("%d+")
@@ -602,10 +626,16 @@ end
 --   "macro" -> type="macro",  "/cast [@mouseover] ..." as a fallback if a
 --              client's CastSpellByName rejects the parenthesised rank form
 local function CastSpec(castString, label, icon, rank, mode)
-    if (ns.db and ns.db.castMode) == "macro" then
+    -- /stopcasting has to travel with the cast, so this forces the macro form.
+    -- The cost is losing the frame's unit inheritance, hence @mouseover -- which
+    -- is correct for a click binding anyway, since the cursor is over the frame.
+    local stopFirst = ns.db and ns.db.stopCastingFix
+
+    if stopFirst or (ns.db and ns.db.castMode) == "macro" then
+        local macrotext = (stopFirst and "/stopcasting\n" or "")
+            .. "/cast [@mouseover,exists][] " .. castString
         return {
-            type = "macro", key = "macrotext",
-            value = "/cast [@mouseover,exists][] " .. castString,
+            type = "macro", key = "macrotext", value = macrotext,
             label = label, icon = icon, rank = rank, rankMode = mode, cast = castString,
         }
     end

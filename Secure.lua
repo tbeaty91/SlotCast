@@ -116,8 +116,30 @@ end
 -- applying the plan
 ------------------------------------------------------------------------------
 
+-- Frames that usually hold something hostile. Casting a heal at a boss frame
+-- burns a click and sometimes a global cooldown, so allow opting out of them
+-- while keeping party, raid, player and pet frames bound.
+local ENEMY_FRAME_PATTERNS = { "^TargetFrame", "^FocusFrame", "^Boss%d", "^Arena" }
+
+function ns.FrameExcluded(frame)
+    if not ns.db or not ns.db.skipEnemyFrames then return false end
+    local ok, name = pcall(frame.GetName, frame)
+    if not ok or type(name) ~= "string" then return false end
+    for _, pattern in ipairs(ENEMY_FRAME_PATTERNS) do
+        if name:find(pattern) then return true end
+    end
+    return false
+end
+
 function Secure.ApplyToFrame(frame)
     if InCombatLockdown() then return end
+
+    -- Excluded frames are actively restored rather than skipped, so turning the
+    -- option on takes effect immediately instead of at the next reload.
+    if ns.FrameExcluded(frame) then
+        Secure.RestoreFrame(frame)
+        return
+    end
 
     local store = saved[frame]
     if not store then store = {}; saved[frame] = store end

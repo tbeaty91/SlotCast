@@ -136,6 +136,16 @@ ns.defaults = {
     -- will not take the "Name(Rank N)" form.
     castMode      = "spell",
 
+    -- Draw each slot's click on the action button itself.
+    showBarLabels  = true,
+
+    -- Leave target, focus, boss and arena frames alone.
+    skipEnemyFrames = false,
+
+    -- Prepend /stopcasting so a click-cast interrupts whatever you are casting
+    -- instead of being swallowed by it.
+    stopCastingFix = false,
+
     warnConflicts  = true,
     announceDefer  = true,
 }
@@ -186,6 +196,7 @@ local function DoRefresh()
     refreshPending = false
     ns.Slots.BuildPlan()
     ns.Secure.ApplyAll()
+    if ns.Labels then ns.Labels.Update() end
 
     if ns.Options and ns.Options.RefreshDisplay then ns.Options.RefreshDisplay() end
 end
@@ -329,7 +340,7 @@ table.sort(ns.unavailableEvents)
 -- Which files actually loaded. A module missing from the addon folder is
 -- otherwise invisible: the slash command just nil-indexes and dies quietly,
 -- because retail hides Lua errors unless scriptErrors is on.
-ns.MODULES = { "Slots", "Secure", "Conflicts", "Probe", "Options" }
+ns.MODULES = { "Slots", "Secure", "Labels", "Conflicts", "Probe", "Options" }
 
 function ns.MissingModules()
     local missing = {}
