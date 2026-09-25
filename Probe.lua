@@ -206,6 +206,38 @@ local function ProbeBars()
         addf("  source bar %s: could not read button positions (bar disabled?)", ns.db.bar)
     end
 
+    -- Can a bar's orientation be set from code, or only by the user in Edit
+    -- Mode? Report what exists rather than assuming either way.
+    section("2b. EDIT MODE APIS")
+    for _, path in ipairs({
+        "EditModeManagerFrame", "C_EditMode", "C_EditMode.GetLayouts",
+        "C_EditMode.SaveLayouts", "C_EditMode.SetActiveLayout",
+        "Enum.EditModeActionBarSetting", "Enum.ActionBarOrientation",
+        "EditModeManagerFrame.UpdateActionBarSettings",
+        "ShowUIPanel",
+    }) do
+        ReportAPI(path)
+    end
+
+    local barSetting = Lookup("Enum.EditModeActionBarSetting")
+    if type(barSetting) == "table" then
+        local keys = {}
+        for k, v in pairs(barSetting) do keys[#keys + 1] = ("%s=%s"):format(tostring(k), tostring(v)) end
+        table.sort(keys)
+        addf("  Enum.EditModeActionBarSetting: %s", table.concat(keys, " "))
+    end
+
+    local orientation = Lookup("Enum.ActionBarOrientation")
+    if type(orientation) == "table" then
+        local keys = {}
+        for k, v in pairs(orientation) do keys[#keys + 1] = ("%s=%s"):format(tostring(k), tostring(v)) end
+        table.sort(keys)
+        addf("  Enum.ActionBarOrientation: %s", table.concat(keys, " "))
+    end
+
+    local _, editModeHow = ns.FindSlashHandler("/editmode")
+    addf("  /editmode handler: %s", editModeHow or "not a SLASH_ global")
+
     -- How high do action slots actually go on this client?
     local highest = 0
     for slot = 1, 240 do

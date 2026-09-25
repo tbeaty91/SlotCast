@@ -777,6 +777,23 @@ local function BuildPanel()
     end)
     gridOrderButton:SetScript("OnLeave", GameTooltip_Hide)
 
+    local editModeButton = PushButton(panel, 148, 22, "Open Edit Mode")
+    editModeButton:SetPoint("TOPLEFT", RIGHT_X + 152, -450)
+    editModeButton:SetScript("OnClick", function()
+        if not ns.OpenEditMode() then
+            ns.Warn("could not open Edit Mode - press Escape and choose it from the menu.")
+        end
+    end)
+    editModeButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Change the bar's shape")
+        GameTooltip:AddLine("Set the source bar to Vertical, 3 columns wide, then press Map grid to clicks again.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("SlotCast opens Edit Mode but won't change your layout for you - it's shared across characters.", 1, 0.6, 0.2, true)
+        GameTooltip:Show()
+    end)
+    editModeButton:SetScript("OnLeave", GameTooltip_Hide)
+
     return panel
 end
 

@@ -334,6 +334,20 @@ function Conflicts.OpenBlizzardUI()
     return false
 end
 
+-- Open Edit Mode for the user. Deliberately opens it rather than changing
+-- anything: a bar's orientation lives in their saved UI layout, which is shared
+-- across characters and not ours to rewrite on a whim, even if the API allows it.
+function ns.OpenEditMode()
+    local ok, how = RunSlashCommand("/editmode")
+    if ok then return true, how end
+
+    local frame = _G.EditModeManagerFrame
+    if frame and type(_G.ShowUIPanel) == "function" then
+        if pcall(_G.ShowUIPanel, frame) then return true, "ShowUIPanel" end
+    end
+    return false
+end
+
 function Conflicts.ExplainManualBinding(combo, action)
     local opened, how = Conflicts.OpenBlizzardUI()
 
