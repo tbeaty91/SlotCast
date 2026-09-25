@@ -12,7 +12,7 @@ local Options = ns.Options
 local ROW_H    = 24
 local COL_W    = 300
 local CONTENT_W = 652
-local CONTENT_H = 676
+local CONTENT_H = 696
 local LEFT_X   = 16
 local RIGHT_X  = 336
 
@@ -760,26 +760,26 @@ local function BuildPanel()
     -- rather than blending into the surrounding explanatory text.
     previewTipBg = panel:CreateTexture(nil, "BACKGROUND")
     previewTipBg:SetPoint("TOPLEFT", RIGHT_X - 6, -478)
-    previewTipBg:SetSize(COL_W + 12, 42)
+    previewTipBg:SetSize(COL_W + 12, 52)
     previewTipBg:Hide()
 
     previewTipEdge = panel:CreateTexture(nil, "BORDER")
     previewTipEdge:SetPoint("TOPLEFT", RIGHT_X - 6, -478)
-    previewTipEdge:SetSize(3, 42)
+    previewTipEdge:SetSize(3, 52)
     previewTipEdge:Hide()
 
     previewHeader = Label(panel, "", "GameFontHighlightSmall")
     previewHeader:SetPoint("TOPLEFT", RIGHT_X, -484)
     previewHeader:SetWidth(COL_W)
-    previewHeader:SetHeight(30)
+    previewHeader:SetHeight(42)
 
     gridAxisLabel = Label(panel, "", "GameFontDisableSmall")
-    gridAxisLabel:SetPoint("TOPLEFT", RIGHT_X, -518)
+    gridAxisLabel:SetPoint("TOPLEFT", RIGHT_X, -536)
     gridAxisLabel:SetWidth(COL_W)
     gridAxisLabel:SetHeight(34)
 
     previewFrame = CreateFrame("Frame", nil, panel)
-    previewFrame:SetPoint("TOPLEFT", RIGHT_X, -556)
+    previewFrame:SetPoint("TOPLEFT", RIGHT_X, -574)
     previewFrame:SetSize(COL_W, 104)
     gridAxisLabel:SetWidth(COL_W)
     gridAxisLabel:SetJustifyV("TOP")
@@ -956,14 +956,14 @@ function Options.RefreshDisplay()
         previewHeader:SetText("|cff808080Bar layout not readable.|r")
     elseif ns.db.lastMappedShape and shape ~= ns.db.lastMappedShape then
         Highlight(1, 0.3, 0.3)
-        previewHeader:SetText(("|cffff6060This bar was %s when you mapped it and is now %s.|r\n|cffffffffPress Map grid to clicks again.|r")
+        previewHeader:SetText(("|cffff6060This bar was %s when mapped, now %s.|r\n|cffffffffPress Map grid to clicks again.|r")
             :format(ns.db.lastMappedShape, shape))
     elseif gridCols > gridRows then
         -- A bar wider than it is tall puts the mouse buttons on the rows, so
         -- Left / Middle / Right run downwards. It works, and it reads badly
         -- against a mouse, which is laid out left to right.
         Highlight(1, 0.82, 0)
-        previewHeader:SetText("|cffffcc00Heads up - this bar is horizontal.|r\n|cffffffffThe grid works best Vertical, 3 columns wide: Left / Middle / Right across the top, modifiers down.|r")
+        previewHeader:SetText("|cffffcc00Heads up - this bar is horizontal.|r\n|cffffffffIt works best Vertical, 3 columns wide.|r")
     else
         previewHeader:SetText("|cffa0a0a0Your bar, and the click each slot gets:|r")
     end
