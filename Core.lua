@@ -178,10 +178,44 @@ end
 ------------------------------------------------------------------------------
 
 local refreshPending, refreshQueued = false, false
+local appliedSignature
+
+-- A stable description of everything that affects what gets written to frames.
+-- Sorted because the plan is built by iterating a hash table, so its order is
+-- not stable between builds even when the contents are identical.
+local function StateSignature()
+    local parts = {}
+    local plan = ns.Slots.plan
+    for i = 1, #plan do
+        parts[i] = plan[i].attr .. "=" .. tostring(plan[i].value)
+    end
+    table.sort(parts)
+
+    return table.concat({
+        table.concat(parts, ";"),
+        tostring(ns.db.enabled),
+        tostring(ns.db.skipEnemyFrames),
+        tostring(ns.db.bar),
+        tostring(ns.ClickStroke()),
+    }, "|")
+end
 
 local function DoRefresh()
     refreshQueued = false
     if not ns.db then return end
+
+    -- Build first: building only reads, so it is safe in combat, and it is the
+    -- only way to know whether anything actually changed. Plenty of events land
+    -- here for reasons unrelated to bindings -- roster updates, spell overrides,
+    -- macro edits -- and none of those should look like a deferred change.
+    ns.Slots.BuildPlan()
+    local signature = StateSignature()
+
+    if signature == appliedSignature then
+        if ns.Labels then ns.Labels.Update() end
+        if ns.Options and ns.Options.RefreshDisplay then ns.Options.RefreshDisplay() end
+        return
+    end
 
     if InCombatLockdown() then
         -- SetAttribute on a secure frame is forbidden in combat. Remember that
@@ -194,10 +228,9 @@ local function DoRefresh()
     end
 
     refreshPending = false
-    ns.Slots.BuildPlan()
     ns.Secure.ApplyAll()
+    appliedSignature = signature
     if ns.Labels then ns.Labels.Update() end
-
     if ns.Options and ns.Options.RefreshDisplay then ns.Options.RefreshDisplay() end
 end
 
@@ -486,13 +519,17 @@ function Dispatch(cmd, rest, restRaw)
             ns.Print("usage: |cffffff00/slotcast castmode spell|r or |cffffff00/slotcast castmode macro|r (current: %s)", ns.db.castMode)
         end
 
+    elseif cmd == "quiet" then
+        ns.db.announceDefer = not ns.db.announceDefer
+        ns.Print("combat-deferral messages %s.", ns.db.announceDefer and "on" or "off")
+
     elseif cmd == "toggle" then
         ns.db.enabled = not ns.db.enabled
         ns.Print(ns.db.enabled and "enabled" or "disabled")
         ns.Refresh(true)
 
     else
-        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00clicks|r, |cffffff00menuverb|r, |cffffff00blizz|r, |cffffff00grid|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00toggle|r")
+        ns.Print("commands: |cffffff00/slotcast|r (options), |cffffff00check|r, |cffffff00probe|r, |cffffff00status|r, |cffffff00rank|r, |cffffff00castmode|r, |cffffff00clicks|r, |cffffff00menuverb|r, |cffffff00blizz|r, |cffffff00grid|r, |cffffff00conflicts|r, |cffffff00dump|r, |cffffff00quiet|r, |cffffff00toggle|r")
     end
 end
 

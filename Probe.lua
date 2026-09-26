@@ -754,6 +754,7 @@ function Probe.Check(forceChat, frameName)
     local okUnit, unit = pcall(frame.GetAttribute, frame, "unit")
     addf("frame: %s   unit=%s", (okName and name) or "(unnamed)", okUnit and tostring(unit) or "?")
     addf("click stroke: %s -> firing on %s", ns.db.clickStroke, ns.ClickStroke())
+    addf("changes waiting for combat to end: %s", tostring(ns.IsRefreshPending()))
     addf("frame verbs: target=%s menu=%s",
         tostring(ns.FrameVerb("target")), tostring(ns.FrameVerb("menu")))
 
