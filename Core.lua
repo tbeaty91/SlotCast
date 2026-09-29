@@ -328,8 +328,15 @@ function handlers.ACTIONBAR_PAGE_CHANGED()
 end
 
 handlers.UPDATE_MACROS                  = function() ns.Refresh() end
-handlers.LEARNED_SPELL_IN_TAB           = function() ns.Refresh() end
-handlers.LEARNED_SPELL_IN_SKILL_LINE    = function() ns.Refresh() end
+-- A new rank changes what the bare name resolves to, so the cached rank
+-- verdicts are stale: without the wipe, the old top rank keeps reading as
+-- "highest" and a rank-pinned slot never notices Rank 4 exists.
+local function SpellsLearned()
+    if ns.WipeRankCache then ns.WipeRankCache() end
+    ns.Refresh()
+end
+handlers.LEARNED_SPELL_IN_TAB           = SpellsLearned
+handlers.LEARNED_SPELL_IN_SKILL_LINE    = SpellsLearned
 handlers.PLAYER_LEVEL_UP                = function() ns.Refresh() end
 handlers.PLAYER_SPECIALIZATION_CHANGED  = function() ns.Refresh() end
 handlers.UPDATE_BONUS_ACTIONBAR         = function() if ns.db and ns.db.bar == 1 then ns.Refresh() end end

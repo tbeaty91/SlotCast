@@ -462,22 +462,23 @@ local function CreateRow(parent, hasIcon)
         end)
         row.rank:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            if not row.rankText and row.topRankText then
-                GameTooltip:SetText(("%s - your highest rank"):format(row.topRankText))
-                GameTooltip:AddLine(("This is the best rank you know, so casting %s and casting max are the same spell. Nothing to choose yet."):format(row.topRankText), 0.8, 0.8, 0.8, true)
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Once you learn a higher rank, this unlocks and you can pick between this rank and max.", 0.5, 0.8, 1, true)
-            elseif not row.rankText then
+            if not row.rankText then
                 GameTooltip:SetText("No ranks")
                 GameTooltip:AddLine("This spell has only one rank, so there is nothing to choose.", 0.8, 0.8, 0.8, true)
             elseif ns.RankModeFor(row.target) == "highest" then
                 GameTooltip:SetText("Highest rank")
                 GameTooltip:AddLine(("Casts |cffffffff%s|r - always the best rank you know."):format(row.castText or "?"), 0.8, 0.8, 0.8, true)
+                if row.isTopRank then
+                    GameTooltip:AddLine(("%s is your best rank today, so this casts the same thing. When you learn a higher rank, this moves up to it."):format(row.rankText), 0.8, 0.8, 0.8, true)
+                end
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddLine(("Click to cast %s exactly instead."):format(row.rankText), 0.5, 0.8, 1, true)
             else
                 GameTooltip:SetText(row.rankText)
                 GameTooltip:AddLine(("Casts |cffffffff%s|r - this rank exactly, for downranking."):format(row.castText or "?"), 0.8, 0.8, 0.8, true)
+                if row.isTopRank then
+                    GameTooltip:AddLine(("%s is your best rank today, so this is the same as max for now. When you learn a higher rank, this keeps casting %s."):format(row.rankText, row.rankText), 0.8, 0.8, 0.8, true)
+                end
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddLine("Click to always cast the highest rank instead.", 0.5, 0.8, 1, true)
             end
@@ -518,19 +519,15 @@ local function UpdateRow(row)
 
     local spec = ns.Slots.ReadSlot(ns.Slots.SlotFor(row.target), row.target)
     row.note = spec and spec.note or nil
-    row.rankText = spec and spec.rank or nil
-    row.topRankText = spec and spec.topRank or nil
+    row.rankText = spec and (spec.rank or spec.topRank) or nil
+    row.isTopRank = spec and spec.topRank ~= nil or false
     row.castText = spec and spec.cast or nil
 
     if row.rank then
-        if spec and spec.rank then
+        if spec and (spec.rank or spec.topRank) then
             row.rank:SetEnabled(true)
             row.rank:SetAlpha(1)
-            row.rank:SetText(spec.rankMode == "highest" and "|cffffcc00max|r" or ns.ShortRank(spec.rank))
-        elseif spec and spec.topRank then
-            row.rank:SetEnabled(false)
-            row.rank:SetAlpha(0.6)
-            row.rank:SetText(ns.ShortRank(spec.topRank))
+            row.rank:SetText(spec.rankMode == "highest" and "|cffffcc00max|r" or ns.ShortRank(spec.rank or spec.topRank))
         else
             row.rank:SetEnabled(false)
             row.rank:SetAlpha(0.3)

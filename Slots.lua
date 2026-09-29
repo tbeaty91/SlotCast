@@ -680,9 +680,11 @@ function Slots.ReadSlot(slot, index)
         -- rank string has to be the client's localised one, not a rebuilt one.
         -- A subtext is only usable as a rank if naming it actually selects a
         -- different spell than the bare name. Anything else is flavour text.
-        -- A rank subtext that fails the test is usually the HIGHEST rank known:
-        -- real, but casting it and casting max are the same spell. Kept apart
-        -- from `rank` so the UI can say so instead of claiming "no ranks".
+        -- A rank subtext that fails the test is usually the HIGHEST rank known.
+        -- It still gets the rank/max toggle: the two cast the same spell today,
+        -- but differ once a higher rank is learned. The cast stays rankless
+        -- until then (identical in effect, and safe if the subtext was only
+        -- flavour); the next refresh after learning a rank sees a real rank.
         local topRank
         if rank and not RankIsSelectable(name, rank, id) then
             if ResolveSpellID(name) == id then topRank = rank end
@@ -698,6 +700,9 @@ function Slots.ReadSlot(slot, index)
                 castString = ("%s(%s)"):format(name, rank)
                 label = ("%s |cff80c0ff(%s)|r"):format(name, rank)
             end
+        elseif topRank then
+            label = mode == "highest" and ("%s |cff808080(max)|r"):format(name)
+                or ("%s |cff80c0ff(%s)|r"):format(name, topRank)
         end
 
         -- type="spell" is the one that matters: SecureActionButton_OnClick
