@@ -525,6 +525,15 @@ end
 -- The one case this reports "no" on a genuinely ranked client is a slot holding
 -- the HIGHEST rank, where both forms name the same spell. Casting rankless
 -- there is identical in effect, so the false negative is free.
+--
+-- But WoW Forever showed the name test is not enough on its own: its resolver
+-- strips the parenthetical like retail's does, so "Healing Wave(Rank 3)" came
+-- back as the TOP rank's id, matched the plain id, and every rank was reported
+-- as flavour text -- silently casting max rank from a Rank 3 slot. So there is
+-- a second test that needs no name parsing at all: the slot holds a different
+-- spell than the bare name resolves to, and that spell's subtext is ALSO a rank
+-- string, and a different one. Retail flavour fails it (the bare name resolves
+-- to the slot's own spell); a lower rank in the slot passes it.
 local rankFormCache = {}
 
 local function ResolveSpellID(identifier)
@@ -544,8 +553,9 @@ end
 ns.ResolveSpellID = ResolveSpellID
 
 -- Returns usable, plainID, rankedID (the ids are for diagnostics).
-local function RankIsSelectable(name, rank)
-    local key = name .. "\1" .. rank
+-- `slotID` is optional; without it only the name test runs.
+local function RankIsSelectable(name, rank, slotID)
+    local key = name .. "\1" .. rank .. "\1" .. tostring(slotID)
     local cached = rankFormCache[key]
     if cached ~= nil then return cached[1], cached[2], cached[3] end
 
@@ -553,6 +563,11 @@ local function RankIsSelectable(name, rank)
     local rankedID = ResolveSpellID(("%s(%s)"):format(name, rank))
 
     local usable = (rankedID ~= nil) and (plainID ~= nil) and (rankedID ~= plainID)
+
+    if not usable and slotID and plainID and slotID ~= plainID then
+        local topRank = SpellRank(plainID)
+        usable = (topRank ~= nil) and (topRank ~= rank)
+    end
 
     rankFormCache[key] = { usable, plainID, rankedID }
     return usable, plainID, rankedID
@@ -666,7 +681,7 @@ function Slots.ReadSlot(slot, index)
         -- rank string has to be the client's localised one, not a rebuilt one.
         -- A subtext is only usable as a rank if naming it actually selects a
         -- different spell than the bare name. Anything else is flavour text.
-        if rank and not RankIsSelectable(name, rank) then rank = nil end
+        if rank and not RankIsSelectable(name, rank, id) then rank = nil end
 
         local castString = name
         local label = name

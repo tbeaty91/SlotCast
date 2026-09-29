@@ -310,7 +310,7 @@ local function DescribeSpell(label, id)
     end
 
     if subtext and name and type(ns.RankIsSelectable) == "function" then
-        local ok, usable, plainID, rankedID = pcall(ns.RankIsSelectable, name, subtext)
+        local ok, usable, plainID, rankedID = pcall(ns.RankIsSelectable, name, subtext, id)
         if ok then
             addf("    rank test [%s(%s)]: plain id=%s ranked id=%s -> %s",
                 name, subtext, tostring(plainID), tostring(rankedID),
