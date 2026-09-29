@@ -462,7 +462,12 @@ local function CreateRow(parent, hasIcon)
         end)
         row.rank:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            if not row.rankText then
+            if not row.rankText and row.topRankText then
+                GameTooltip:SetText(("%s - your highest rank"):format(row.topRankText))
+                GameTooltip:AddLine(("This is the best rank you know, so casting %s and casting max are the same spell. Nothing to choose yet."):format(row.topRankText), 0.8, 0.8, 0.8, true)
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Once you learn a higher rank, this unlocks and you can pick between this rank and max.", 0.5, 0.8, 1, true)
+            elseif not row.rankText then
                 GameTooltip:SetText("No ranks")
                 GameTooltip:AddLine("This spell has only one rank, so there is nothing to choose.", 0.8, 0.8, 0.8, true)
             elseif ns.RankModeFor(row.target) == "highest" then
@@ -514,6 +519,7 @@ local function UpdateRow(row)
     local spec = ns.Slots.ReadSlot(ns.Slots.SlotFor(row.target), row.target)
     row.note = spec and spec.note or nil
     row.rankText = spec and spec.rank or nil
+    row.topRankText = spec and spec.topRank or nil
     row.castText = spec and spec.cast or nil
 
     if row.rank then
@@ -521,6 +527,10 @@ local function UpdateRow(row)
             row.rank:SetEnabled(true)
             row.rank:SetAlpha(1)
             row.rank:SetText(spec.rankMode == "highest" and "|cffffcc00max|r" or ns.ShortRank(spec.rank))
+        elseif spec and spec.topRank then
+            row.rank:SetEnabled(false)
+            row.rank:SetAlpha(0.6)
+            row.rank:SetText(ns.ShortRank(spec.topRank))
         else
             row.rank:SetEnabled(false)
             row.rank:SetAlpha(0.3)
@@ -1022,7 +1032,7 @@ function Options.RefreshDisplay()
     local hasRanks = false
     for i = 1, ns.SLOTS_PER_BAR do
         local spec = ns.Slots.ReadSlot(ns.Slots.SlotFor(i), i)
-        if spec and spec.rank then hasRanks = true break end
+        if spec and (spec.rank or spec.topRank) then hasRanks = true break end
     end
     rankDefaultLabel:SetShown(hasRanks)
     for _, entry in ipairs(rankDefaultButtons) do

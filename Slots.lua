@@ -526,14 +526,12 @@ end
 -- the HIGHEST rank, where both forms name the same spell. Casting rankless
 -- there is identical in effect, so the false negative is free.
 --
--- But WoW Forever showed the name test is not enough on its own: its resolver
--- strips the parenthetical like retail's does, so "Healing Wave(Rank 3)" came
--- back as the TOP rank's id, matched the plain id, and every rank was reported
--- as flavour text -- silently casting max rank from a Rank 3 slot. So there is
--- a second test that needs no name parsing at all: the slot holds a different
--- spell than the bare name resolves to, and that spell's subtext is ALSO a rank
--- string, and a different one. Retail flavour fails it (the bare name resolves
--- to the slot's own spell); a lower rank in the slot passes it.
+-- Backstop in case a client's resolver ever strips the parenthetical: a second
+-- test that needs no name parsing at all. The slot holds a different spell than
+-- the bare name resolves to, and that spell's subtext is ALSO a rank string,
+-- and a different one. Retail flavour fails it (the bare name resolves to the
+-- slot's own spell); a lower rank in the slot passes it. (WoW Forever 1.60.1
+-- does honour the parenthetical -- the name test alone works there.)
 local rankFormCache = {}
 
 local function ResolveSpellID(identifier)
@@ -682,7 +680,14 @@ function Slots.ReadSlot(slot, index)
         -- rank string has to be the client's localised one, not a rebuilt one.
         -- A subtext is only usable as a rank if naming it actually selects a
         -- different spell than the bare name. Anything else is flavour text.
-        if rank and not RankIsSelectable(name, rank, id) then rank = nil end
+        -- A rank subtext that fails the test is usually the HIGHEST rank known:
+        -- real, but casting it and casting max are the same spell. Kept apart
+        -- from `rank` so the UI can say so instead of claiming "no ranks".
+        local topRank
+        if rank and not RankIsSelectable(name, rank, id) then
+            if ResolveSpellID(name) == id then topRank = rank end
+            rank = nil
+        end
 
         local castString = name
         local label = name
@@ -698,7 +703,9 @@ function Slots.ReadSlot(slot, index)
         -- type="spell" is the one that matters: SecureActionButton_OnClick
         -- resolves the frame's own unit attribute and casts on it, so this
         -- works on any registered unit frame with no per-frame macro text.
-        return CastSpec(castString, label, icon, rank, mode)
+        local spec = CastSpec(castString, label, icon, rank, mode)
+        spec.topRank = topRank
+        return spec
 
     elseif kind == "item" then
         local name = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id))
