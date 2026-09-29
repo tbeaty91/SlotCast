@@ -309,6 +309,23 @@ local function DescribeSpell(label, id)
         if ok and type(value) == "string" then name = value end
     end
 
+    -- What the shipping code concludes, step by step, so a greyed-out rank
+    -- button can be traced to the exact test that said no.
+    if type(ns.SpellRank) == "function" then
+        local ok, rank = pcall(ns.SpellRank, id)
+        addf("    SpellRank(slot id) -> %s", ok and ("[" .. tostring(rank) .. "]") or ("ERROR " .. tostring(rank)))
+    end
+    if name and type(ns.ResolveSpellID) == "function" then
+        local ok, plainID = pcall(ns.ResolveSpellID, name)
+        if ok and plainID then
+            local okr, plainRank = pcall(ns.SpellRank, plainID)
+            addf("    bare name [%s] -> id=%s subtext=[%s]  (slot id=%s, %s)",
+                name, tostring(plainID), okr and tostring(plainRank) or "ERROR", tostring(id),
+                plainID == id and "SAME spell" or "different spell")
+        else
+            addf("    bare name [%s] -> %s", name, ok and "no id" or ("ERROR " .. tostring(plainID)))
+        end
+    end
     if subtext and name and type(ns.RankIsSelectable) == "function" then
         local ok, usable, plainID, rankedID = pcall(ns.RankIsSelectable, name, subtext, id)
         if ok then
@@ -321,6 +338,8 @@ end
 
 local function ProbeRanks()
     section("3b. SPELLS ON THE SOURCE BAR")
+    addf("  SlotCast version %s", tostring(C_AddOns and C_AddOns.GetAddOnMetadata
+        and C_AddOns.GetAddOnMetadata("SlotCast", "Version") or "?"))
 
     local found = 0
     for index = 1, ns.SLOTS_PER_BAR do

@@ -574,6 +574,7 @@ local function RankIsSelectable(name, rank, slotID)
 end
 
 ns.RankIsSelectable = RankIsSelectable
+ns.SpellRank = SpellRank
 
 function ns.WipeRankCache()
     wipe(rankFormCache)
