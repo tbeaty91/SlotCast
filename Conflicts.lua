@@ -309,8 +309,19 @@ end
 ns.RunSlashCommand = RunSlashCommand
 
 function Conflicts.OpenBlizzardUI()
-    -- The slash command first: it is the documented way in and survives the
-    -- frame being renamed or rebuilt.
+    -- Already open: done. Checked first because the preferred route is a
+    -- TOGGLE, and calling it now would close the window instead.
+    local frame = _G.ClickBindingFrame
+    if frame and frame.IsShown and frame:IsShown() then return true, "already open" end
+
+    -- Blizzard's own opener. It load-on-demands Blizzard_ClickBindingUI, which
+    -- is why poking ClickBindingFrame directly can find nothing to show, and it
+    -- is a plain function call -- no borrowing the chat box.
+    if type(_G.ToggleClickBindingFrame) == "function" then
+        if pcall(_G.ToggleClickBindingFrame) then return true, "ToggleClickBindingFrame" end
+    end
+
+    -- The slash command next: it survives the function being renamed.
     local ok, how = RunSlashCommand("/clickcasting")
     if ok then return true, how end
 

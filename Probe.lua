@@ -881,6 +881,7 @@ function Probe.Check(forceChat, frameName)
     -- a SecureCmdList entry, or known only to the chat parser.
     local _, how = ns.FindSlashHandler("/clickcasting")
     addf("  /clickcasting handler: %s", how or "not a SLASH_ global")
+    ReportAPI("ToggleClickBindingFrame")
     ReportAPI("ChatEdit_SendText")
     ReportAPI("ChatFrame1EditBox")
     ReportAPI("SecureCmdList")
