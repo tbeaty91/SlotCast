@@ -308,7 +308,20 @@ end
 
 ns.RunSlashCommand = RunSlashCommand
 
-function Conflicts.OpenBlizzardUI()
+-- Click Bindings is only usable with the spellbook beside it -- spells are
+-- dragged in from there. WoW Forever's beta (1.60.1) opens the combined
+-- spells window on its TALENTS tab instead, by every route: /clickcasting,
+-- ToggleClickBindingFrame, and showing ClickBindingFrame directly. Switching
+-- the tab afterwards was confirmed in game to fix it. Harmless where the bug
+-- is absent: it asks for the tab the window should already be on.
+local function ShowSpellBookBeside()
+    local util = _G.PlayerSpellsUtil
+    if util and type(util.OpenToSpellBookTab) == "function" then
+        pcall(util.OpenToSpellBookTab)
+    end
+end
+
+local function OpenClickBindings()
     -- Already open: done. Checked first because the preferred route is a
     -- TOGGLE, and calling it now would close the window instead.
     local frame = _G.ClickBindingFrame
@@ -343,6 +356,12 @@ function Conflicts.OpenBlizzardUI()
         if okAttempt and opened then return true, attempt[1] end
     end
     return false
+end
+
+function Conflicts.OpenBlizzardUI()
+    local opened, how = OpenClickBindings()
+    if opened then ShowSpellBookBeside() end
+    return opened, how
 end
 
 -- Open Edit Mode for the user. Deliberately opens it rather than changing
