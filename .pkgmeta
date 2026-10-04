@@ -1,0 +1,4 @@
+package-as: SlotCast
+
+ignore:
+  - art

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="75%">
+      <stop offset="0" stop-color="#2a2350"/>
+      <stop offset="1" stop-color="#0d0b1c"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe28a"/>
+      <stop offset="0.5" stop-color="#d9a332"/>
+      <stop offset="1" stop-color="#8a5a12"/>
+    </linearGradient>
+    <radialGradient id="slot" cx="50%" cy="50%" r="60%">
+      <stop offset="0" stop-color="#1f4f8f"/>
+      <stop offset="1" stop-color="#0a1a33"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.35" stop-color="#9fe3ff"/>
+      <stop offset="1" stop-color="#3aa0ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- action bar slot -->
+  <rect x="92" y="92" width="290" height="290" rx="34" fill="url(#gold)"/>
+  <rect x="112" y="112" width="250" height="250" rx="20" fill="url(#slot)"/>
+
+  <!-- spell glyph: four-point spark -->
+  <circle cx="237" cy="237" r="105" fill="url(#glow)" opacity="0.85"/>
+  <path d="M237 137 L258 216 L337 237 L258 258 L237 337 L216 258 L137 237 L216 216 Z"
+        fill="#ffffff"/>
+
+  <!-- click ripples -->
+  <g fill="none" stroke="#ffe28a" stroke-width="14" stroke-linecap="round">
+    <path d="M318 344 A 50 50 0 0 1 344 318"/>
+    <path d="M292 352 A 78 78 0 0 1 352 292" opacity="0.6"/>
+  </g>
+
+  <!-- mouse cursor -->
+  <path d="M336 336 L336 470 L370 436 L396 488 L422 475 L397 424 L444 424 Z"
+        fill="#ffffff" stroke="#0d0b1c" stroke-width="12" stroke-linejoin="round"/>
+</svg>
