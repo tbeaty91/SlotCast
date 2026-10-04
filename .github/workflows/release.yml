@@ -1,0 +1,22 @@
+# Push a tag (e.g. 2.8.8) and this packages the addon and uploads it to
+# CurseForge + a GitHub Release. CurseForge needs the CF_API_KEY repo secret
+# and "## X-Curse-Project-ID" in SlotCast.toc.
+name: Package and release
+
+on:
+  push:
+    tags: ["*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: BigWigsMods/packager@v2
