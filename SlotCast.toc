@@ -4,6 +4,7 @@
 ## Notes: Click-cast from an action bar. Bind a mouse click to an action bar SLOT; whatever you drag into that slot becomes the click binding.
 ## Author: tbeaty
 ## Version: 2.8.7
+## X-Curse-Project-ID: 1727277
 ## SavedVariables: SlotCastDB
 ## IconTexture: Interface\Icons\INV_Misc_Gear_01
 
